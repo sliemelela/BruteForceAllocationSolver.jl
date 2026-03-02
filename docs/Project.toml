@@ -1,0 +1,6 @@
+[deps]
+BruteForceAllocationSolver = "67824009-956b-4479-84ca-a9f9ebf5eb2c"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[sources]
+BruteForceAllocationSolver = {path = ".."}

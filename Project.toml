@@ -1,0 +1,19 @@
+name = "BruteForceAllocationSolver"
+uuid = "67824009-956b-4479-84ca-a9f9ebf5eb2c"
+version = "0.1.0"
+authors = ["Sliem el Ela <sliemelela@gmail.com>"]
+
+[deps]
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+
+
+[compat]
+DocStringExtensions = "0.9.5"
+Test = "1.11.0"
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
