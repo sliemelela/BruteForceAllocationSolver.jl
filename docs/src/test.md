@@ -3,7 +3,7 @@ Numerical dynamic programming algorithms for portfolio choice are highly sensiti
 Minor errors in quadrature integration, grid interpolation, or
 Bellman maximization often do not result in runtime crashes, but rather in silently incorrect economic behavior.
 
-To ensure the integrity of this package, we validate the numerical outputs against three
+To ensure the integrity of this package, we validate the numerical outputs against four
 benchmark models with known analytical or semi-analytical properties.
 Users modifying the core algorithm should run these tests to verify that their changes have not
 broken fundamental economic mechanics.
@@ -46,26 +46,47 @@ feature by introducing a non-tradeable cash flow.
 * **Low Wealth:** At grid points near $W = 0$, the future income dominates the investor's total net worth. $\omega_n^*$ should be highly leveraged, likely hitting the upper bound constraint $\omega_{\max}$.
 * **High Wealth:** As $W_n \to \infty$, the labor income becomes mathematically negligible relative to financial wealth. The optimal weight $\omega_n^*$ must asymptotically approach the standard Merton share $\frac{\mu - r}{\gamma \sigma^2}$.
 
-
-
-## Test Case 3: Predictable Returns and Hedging (State Variables)
-
-This test validates the multidimensional state grid $\mathcal{G}_{Z, n}$, the multidimensional interpolation, and the Cholesky correlation matrix step inside the Gauss-Hermite quadrature.
+## Test Case 3: Complete Market without Human Capital (Real Wealth Optimization)
+This test validates the algorithm's ability to handle multidimensional continuous-time processes and
+inflation-linked assets in a complete market setting where exact analytical solutions are known.
+This serves as the direct baseline before introducing non-tradeable income constraints.
 
 **Setup:**
 
-* **State Variable ($Z_n$):** A mean-reverting AR(1) or Ornstein-Uhlenbeck process representing a return predictor (e.g., a dividend yield).
-* **Asset Returns:** The risk-free rate is constant. The risky asset's expected return is time-varying and equal to the state variable: $\mu_n = Z_n$.
-* **Correlation:** The shocks to the state variable $Z_n$ and the risky asset returns are negatively correlated ($\rho < 0$).
+* **Assets:** A complete financial market consisting of a risk-free bank account, a risky stock, a nominal zero-coupon bond, and an inflation-linked zero-coupon bond.
+* **State Variables ($Z$):** The short-term nominal interest rate $r_t$ and the inflation rate $\pi_t$. Both follow correlated mean-reverting Ornstein-Uhlenbeck dynamics.
+* **Wealth-Dependent Returns:** None. We set $H_t = 0$.
+* **Utility Function:** CRRA utility derived strictly from *real* terminal wealth at time $T$, evaluated as $u(W_T/\Pi_T) = \frac{(W_T/\Pi_T)^{1-\gamma}}{1-\gamma}$.
 
 **Expected Output:**
+Because this complete market problem has an exact analytical solution,
+the numerical optimal portfolio weights $\omega_t^*$ produced by the package must converge precisely to the following closed-form expressions:
 
-1. **State-Dependent Weights (Market Timing):** The optimal weight $\omega_n^*$ must positively correlate with the state grid $\mathcal{G}_{Z, n}$. Higher values of $Z_n$ imply higher expected returns, resulting in larger allocations to the risky asset.
-2. **Intertemporal Hedging Demand:** Because of the negative correlation between the asset returns and the state variable (investment opportunities), a long-term investor will exhibit hedging demands. The optimal $\omega_n^*$ produced by the algorithm must be *higher* than the allocation chosen by a myopic (single-period) investor.
-3. **Correlation Sensitivity:** If the user artificially sets the correlation parameter $\rho = 0$, the intertemporal hedging demand should disappear entirely.
+1. **Stock Allocation:** The optimal weight in the risky stock must be constant and equal to:
+```math
+\tilde{\omega}_{t}^{S}=-\frac{\phi_{S}}{\sigma_{S}}
+```
+where $\phi_S$ is the market price of risk factor loading for the stock,
+and $\sigma_S$ is its volatility.
+
+2. **Inflation-Linked Bond Allocation:** The optimal weight in the inflation-linked bond must match the formula:
+```math
+\tilde{\omega}_{t}^{I}=1-\frac{1}{\gamma}-\frac{\phi_{\pi}}{B_{\pi}(T-t)\sigma_{\pi}}
+```
+where $\phi_\pi$ is the factor loading for inflation, $\sigma_\pi$ is inflation volatility, and
+$B_\pi(T-t)$ is the bond's sensitivity to the inflation rate at time to maturity $T-t$.
+
+3. **Nominal Bond Allocation:** The optimal weight in the nominal zero-coupon bond must match:
+```math
+\tilde{\omega}_{t}^{N}=\frac{B_{r}(T-t)\sigma_{r}\phi_{\pi}+B_{\pi}(T-t)\sigma_{\pi}\phi_{r}}{B_{r}(T-t)B_{\pi}(T-t)\sigma_{r}\sigma_{\pi}}
+```
+where the respective $\phi$, $\sigma$, and $B$ terms correspond to the interest rate $r$ and inflation rate $\pi$ parameters.
 
 
-## Test Case 4: Complete Market with Stochastic Human Capital (Real Wealth Optimization)
+*Validation Check:* The outputs for all three weights should exactly match these analytical values across
+the entire wealth grid $\mathcal{G}_{W, n}$ since human capital is zero and CRRA utility scales perfectly with financial wealth.
+
+## Test Case 5: Complete Market with Stochastic Human Capital (Real Wealth Optimization)
 This advanced test validates the algorithm's ability to handle multidimensional
 continuous-time processes, inflation-linked assets, and a highly structured stochastic income stream
 acting as human capital.
