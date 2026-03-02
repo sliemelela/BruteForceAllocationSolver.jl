@@ -1,10 +1,10 @@
 # Theory
 In this package we are treating an investment consumption optimization problem.
-More specifically, in this package we consider consumption portfolio choice problems at timesteps
+More specifically, we consider consumption portfolio choice problems at timesteps
 $n = 1, 2, \ldots, M$, where $M + 1$ is some terminal timestep.
 This consumption portfolio choice problem at timestep $n$ is defined by an investor who maximizes the sum
-of their (discounted) expected utilities over the time(step) horizon $\{n, n+1 \ldots, M+1\}$.
-This is done by trading $N$ risky assets and a risk-free asset (cash).
+of their (discounted) expected utilities over the time(step) horizon $\{n, n+1, \ldots, M+1\}$.
+This is done by consumption whilst trading $N$ risky assets and a risk-free asset (cash).
 Formally the investor's problem at timestep $n$ is
 ```math
     V_n(W_n, Z_n)
@@ -19,16 +19,15 @@ subject to the sequence of budget constraints
 for all $m \geq n$.
 Here $R^e_{m + 1}$ can be interpreted as the excess return of the risky assets over the risk-free
 asset, and $R_{m + 1}$ is the gross return of other processes that _may_ depend on current wealth
-$(1 - c_m) W_m$.
+$(1 - c_m) W_m$ after consumption.
 Furthermore, $\{c_m, \omega_m\}_{m=n}^{M}$ are the sequence of consumption _fractions_
 (i.e. $c_m \in [0,1]$ for all $m$) and
 portfolio weights chosen at times $m = n, \ldots, M$ and $u$ is the investor's utility function.
 It is assumed that $c_{M + 1} = 1$ as it is the terminal timestep.
 The process $Z_n$ is a vector of state variables that are relevant for the investor's decision making.
 Lastly, $\beta \in (0,1]$ is the subjective discount factor.
-The goal of this package is to find the optimal $\{c_m, \omega_m\}_{m=1}^{M}$.
 
-### Extension: Wealth-Dependent Returns
+### Wealth-Dependent Returns
 A key feature of this implementation is that the gross return $R_{m+1}$ is not restricted to be
 exogenous.
 We allow $R_{m+1}$ to depend on the current level of wealth $(1 - c_m) W_m$ through the
@@ -53,9 +52,20 @@ The wealth at time $n+1$ is:
 By setting $X_n = R^f_n$ and $Y_n = O_n$,
 this matches our budget constraint $W_{n+1} = (1 - c_n) W_n (\omega_n^\top R^e_{n+1} + R_{n+1})$.
 
-#### Example: Solving a Continuous Time Problem optimizing for Real Wealth
+## Goal and Main Assumption
+We assume that the returns $R^e_{m + 1}$ and $R_{m + 1}$ are driven by normally distributed shocks.
+More precisely, at timestep $n$, the uncertainty realized at timestep $n+1$ is captured by a
+multidimensional random shock vector $\varepsilon_{n+1}$ drawn from a multivariate
+normal distribution $\mathcal{N}(0, \Sigma)$.
+Because the next-period state variables $Z_{n+1}$ and the returns are fully determined by these shocks,
+the investor's expectation $\mathbb{E}_n[\cdot]$ can be evaluated by integrating
+directly over this multivariate normal distribution.
 
-##### Setting the Scene
+The goal of this package is to find the optimal $\{c_m, \omega_m\}_{m=1}^{M}$.
+
+
+## How to solve continuous time problems with this package
+### Setting the Scene
 Suppose you are working with a continuous time model of this problem.
 For example, suppose we consider an economic agent that is endowed with initial wealth \
 $w_0$ at time $t = 0$.
@@ -130,7 +140,7 @@ $\tilde{W}_t \coloneqq W_t/\Pi_t = (F_t + h H_t)/\Pi_t$ is given by
 ```
 where $\tilde{O}_t = O_t/\Pi_t$ and $\tilde{c}_t = c_t/\Pi_t$.
 
-##### Transforming it into this framework
+### Transforming it into this framework
 Using the Euler discretization scheme with step size $\delta t > 0$, we have that
 ```math
 \begin{aligned}
@@ -172,13 +182,16 @@ In this case, we have
 \end{aligned}
 ```
 where $\varepsilon_{n+1} = (\varepsilon^r_{n+1}, \varepsilon^\pi_{n+1}, \varepsilon^S_{n+1})$ are
-i.i.d. normal random variables with mean zero and covariance matrix $\rho \delta t$.
+identically distributed over time, drawn from a multivariate normal distribution with mean zero
+and covariance matrix $\rho \delta t$.
 
 ## Algorithm
 We use backwards recursion to solve for the optimal $\{c_m, \omega_m\}_{m=1}^{M}$.
 This means that at some timestep $n$, we assume that $V_{n + 1}(W_{n + 1}, Z_{n + 1})$ is known.
 The base case is that $V_{M + 1}(W_{M + 1}, Z_{M + 1}) = u(W_T)$.
 
+To fully understand the algorithm we must first treat two propositions that are used in it:
+The Bellman Equation and Gauss-Hermite Quadrature.
 
 ### The Bellman Equation
 We first derive the generalized form of the Bellman equation for the value function.
@@ -240,6 +253,72 @@ is "independent" of the choices at time $n$ and can thus be moved inside the exp
 The third equality follows from the tower property of conditional expectations.
 The last equality follows from the definition of the value function at time $n + 1$.
 
+### Gauss-Hermite Quadrature
+Using the Bellman equation, we are now tasked to be evaluate
+```math
+    \mathbb{E}_n\left[V_{n + 1}(W_{n + 1}, Z_{n + 1})\right]
+    = \underbrace{\int_{-\infty}^{\infty} \cdots \int_{-\infty}^{\infty}}_{D \text{ times}}
+        V_{n+1}\Big(W_{n+1}(\boldsymbol{\varepsilon}), Z_{n+1}(\boldsymbol{\varepsilon})\Big)
+        f(\boldsymbol{\varepsilon}) \, d\varepsilon_1 \cdots d\varepsilon_D,
+```
+where $f(\boldsymbol{\varepsilon})$ is the joint probability density function of the $D$-dimensional
+shock vector $\boldsymbol{\varepsilon}$.
+Since we assume that the randomness in the model is driven by purely normally distributed shocks
+we must compute an integral over the
+multivariate normal distribution of the shocks.
+Instead of relying on computationally expensive Monte Carlo simulations, we approximate this
+integral using Gauss-Hermite quadrature.
+
+The standard Gauss-Hermite quadrature rule approximates integrals of the form
+$\int_{-\infty}^{\infty} f(x) e^{-x^2} dx$ using a set of $Q$ deterministic nodes $x_k$ and
+corresponding weights $\omega_k$ (not to be confused with the portfolio choice weights)
+```math
+\int_{-\infty}^{\infty} f(x) e^{-x^2} d x \approx \sum_{k=1}^{Q} \omega_k f(x_k).
+```
+How these $x_k$ and $\omega_k$ are chosen is outside of the scope of this package and we
+simply employ a package that computes these for us.
+For the curious reader: the nodes and weights are deterministically derived from the roots of
+the so-called Hermite polynomials and appropriately scaled to guarantee that the expected value of
+any polynomial up to degree $2Q-1$ under a standard normal distribution is calculated with perfect
+mathematical exactness.
+
+We do run into the issue, however, that the expectation $\mathbb{E}_n[\cdot]$ is taken with
+respect to a standard normal probability density function $\phi(z) = \frac{1}{\sqrt{2\pi}} e^{-z^2/2}$.
+To map the standard normal integral into the Gauss-Hermite framework, we apply the change of
+variables $z = x\sqrt{2}$. This yields the transformed standard normal nodes $z_k$ and weights $w_k$:
+```math
+    z_k = x_k \sqrt{2}, \quad w_k = \frac{\omega_k}{\sqrt{\pi}},
+```
+such that $\int_{-\infty}^{\infty} g(z) \phi(z) dz \approx \sum_{k=1}^{Q} w_k g(z_k)$.
+
+#### Multivariate Extension and Correlation
+Because our model relies on a multidimensional shock vector, we extend this to $D$ dimensions by
+taking the Cartesian product of the 1D nodes and weights.
+This results in $Q^D$ independent multidimensional nodes
+$\boldsymbol{z}_j = (z_{j_1}, \ldots, z_{j_D})^\top$ and their corresponding joint weights
+$W_j = \prod_{d=1}^D w_{j_d}$.
+As stated in our main assumptions, the random shock vector $\varepsilon_{n+1}$ is drawn from
+$\mathcal{N}(0, \Sigma)$.
+To introduce the correct covariance structure to our independent nodes $\boldsymbol{z}_j$,
+we utilize the Cholesky decomposition of the covariance matrix
+$\Sigma = L L^\top$, where $L$ is a lower triangular matrix.
+The correlated multidimensional shocks at node $j$ are given by
+```math
+    \boldsymbol{\varepsilon}_j = L \boldsymbol{z}_j.
+```
+By the Law of the Unconscious Statistician, we can evaluate the expectation of the
+future value function by integrating over the distribution of the shocks
+rather than the distributions of the future states.
+Thus, the expectation in the Bellman equation is approximated by the discrete sum:
+```math
+    \mathbb{E}_n\left[ V_{n + 1}(W_{n + 1}, Z_{n + 1}) \right]
+    \approx \sum_{j=1}^{Q^D} W_j \cdot V_{n+1}\Big(W_{n+1}(\boldsymbol{\varepsilon}_j), Z_{n+1}(\boldsymbol{\varepsilon}_j)\Big),
+```
+where $W_{n+1}(\boldsymbol{\varepsilon}_j)$ and $Z_{n+1}(\boldsymbol{\varepsilon}_j)$
+are the realized next-period wealth and state variables given the shock
+$\boldsymbol{\varepsilon}_j$.
+This interpolated value $\hat{V}_{n+1}$ is then used directly in the Bellman maximization step.
+
 
 ### Grid Selection
 Before the algorithm runs, we first do a forward simulation to be able to choose appropriate
@@ -267,32 +346,14 @@ The grid for each variable is defined as:
 for all $n = 1, \ldots, M$.
 
 #### Returns
-To evaluate the expectation $\mathbb{E}_n[V_{n+1}]$,
-we do not discretize the returns themselves into a fixed grid.
-Instead, we discretize the innovations (shocks) that drive the returns and state variables.
-We assume that the transitions of $Z_{n+1}$ and the returns $R^e_{n+1}$ are driven by a vector of
-shocks $\epsilon_{n+1} \sim \mathcal{N}(0, \Sigma)$.
-We use Gauss-Hermite Quadrature to represent these shocks.
-
-**Independent Shocks**: Let $Q$ be the number of quadrature nodes per dimension.
-We obtain a set of one-dimensional nodes $\{x_q\}_{q=1}^Q$ and weights $\{w_q\}_{q=1}^Q$.
-For a $D$-dimensional shock vector (where $D$ is the number of Brownian motions),
-we form the Cartesian product of these nodes to get a total of $Q^D$ multidimensional nodes
-$\mathbf{x}_j$ and corresponding weights $W_j$.
-
-**Correlation Mapping**: If the shocks are correlated with covariance matrix $\Sigma$,
-we apply the Cholesky decomposition $L$ (where $LL^\top = \Sigma$) to the independent nodes:
+For a given state $Z_n$ and shock $\boldsymbol{\varepsilon}_j$,
+the realized returns are calculated using the model-specific transition functions
 ```math
-\boldsymbol{\epsilon}_j = L \mathbf{x}_j
+R^e_{n+1, j} = \mathcal{R}^e(Z_n, \boldsymbol{\varepsilon}_j), R_{n+1, j} = \mathcal{R}(Z_n, W_n, c_n, \boldsymbol{\varepsilon}_j)
 ```
-**Realized Returns**: For a given state $Z_n$ and shock $\boldsymbol{\epsilon}_j$,
-the realized returns are calculated using the model-specific transition functions:
+Commonly, for Geometric Brownian Motion, this takes the form
 ```math
-R^e_{n+1, j} = \mathcal{R}^e(Z_n, \boldsymbol{\epsilon}_j), R_{n+1, j} = \mathcal{R}(Z_n, W_n, c_n, \boldsymbol{\epsilon}_j)
-```
-Commonly, for Geometric Brownian Motion, this takes the form:
-```math
-R_{n+1, j} = \exp\left( (\mu(Z_n) - \frac{1}{2}\sigma^2) \Delta t + \sigma \sqrt{\Delta t} \boldsymbol{\epsilon}_j \right)
+R_{n+1, j} = \exp\left( (\mu(Z_n) - \frac{1}{2}\sigma^2) \Delta t + \sigma \sqrt{\Delta t} \boldsymbol{\varepsilon}_j \right).
 ```
 
 
@@ -300,8 +361,8 @@ R_{n+1, j} = \exp\left( (\mu(Z_n) - \frac{1}{2}\sigma^2) \Delta t + \sigma \sqrt
 Similarly, let $G_\omega, G_c \in \mathbb{N}$ denote the sizes of the portfolio weights and
 consumption fraction grid respectively, and write $\omega = (\omega^1, \ldots, \omega^N)$.
 The grid selection for portfolio weights is ad-hoc.
-Choose some $\omega_{\min}, \omega_{\max} \in \mathbb{R}$.
-The standard values we take are $\omega_{\min} = -1, \omega_{\max}=2$.
+Choose some $\omega_{\min}, \omega_{\max} \in \mathbb{R}$ and $c_{\min}, c_{\max} \in [0,1]$.
+The standard values we take are $\omega_{\min} = -1, \omega_{\max}=2, c_{\min} = 0, c_{\max} = 1$.
 Then
 ```math
     \begin{aligned}
@@ -316,18 +377,72 @@ for all $n = 1, \ldots, M$.
 
 
 ### Backwards Recursion
-We follow the following steps at timestep $n$:
--  For each $Z_n^{i} \in \mathcal{G}_{Z^{i}, n}$ for $i = 1, \ldots, K$,
-    $W_n \in \mathcal{G}_{W, n}$, $\omega_n \in \mathcal{G}_{\omega, n}$, and $c_n \in \mathcal{G}_{c, n}$
-     we compute
+We proceed iteratively backwards from $n = M$ down to $1$.
+Assuming the next-period value function $V_{n+1}$ is known
+(with the terminal condition $V_{M+1}(W_{M+1}, Z_{M+1}) = u(W_{M+1})$),
+we evaluate the optimal policy for every state combination
+$(W_n, Z_n) \in \mathcal{G}_{W, n} \times \mathcal{G}_{Z, n}$ through the following steps:
+
+#### Control Loop
+For the current state $(W_n, Z_n)$, iterate over all candidate consumption fractions
+$c_n \in \mathcal{G}_{c, n}$ and portfolio weights $\omega_n \in \mathcal{G}_{\omega, n}$.
+
+#### Quadrature Integration
+For each control pair $(c_n, \omega_n)$, approximate the expected future value using the
+$Q^D$ multidimensional quadrature nodes $\boldsymbol{z}_j$ and weights $W_j$:
+- Generate the correlated shock vector $\boldsymbol{\varepsilon}_j = L \boldsymbol{z}_j$.
+- Evaluate the realized returns $R^e_{n+1}(\boldsymbol{\varepsilon}_j)$ and
+    $R_{n+1}(\boldsymbol{\varepsilon}_j)$ using the model's transition dynamics.
+- Compute the realized next-period wealth and state variables:
 ```math
-W_{n + 1} = (1 - c_n) W_n (\omega_)
+    \begin{aligned}
+    W_{n + 1, j} &= (1 - c_n) W_n \bigl(\omega_n^\top R^e_{n + 1}(\boldsymbol{\varepsilon}_j) + R_{n + 1}(\boldsymbol{\varepsilon}_j)\bigr), \\
+    Z_{n + 1, j} &= f_Z(Z_n, \boldsymbol{\varepsilon}_j),
+    \end{aligned}
+```
+where $f_Z$ denotes the deterministic state transition equations defined by the discretized SDEs.
+
+#### Bellman Maximization and Interpolation
+Calculate the current objective value for these controls and select the maximum
+```math
+    V_n(W_n, Z_n) \approx \max_{c_n, \omega_n} \left\{ u(c_n W_n) + \beta \sum_{j=1}^{Q^D} W_j \cdot \hat{V}_{n+1}(W_{n+1, j}, Z_{n+1, j}) \right\}
 ```
 
+
+#### Policy Storage
+Record the (interpolated) value function value and the $c_n^*$ and $\omega_n^*$
+that maximize the equation above as the optimal policy for the
+current grid point $(W_n, Z_n)$.
+
+#### Interpolation
+If the maximum has been calculated for all
+grid points $\mathcal{G}_{W, n} \times \mathcal{G}_{Z, n}$,
+use multidimensional linear interpolation to create a function $\hat{V}_{n}(W_{n}, Z_{n})$
+that is defined for all $W_n, Z_n$.
 ## Notes
 
 On the grid creation:
 - Now a linear uniform grid is used, perhaps another type of spacing?
+- For wealth specifically, AI gave this back:
+>In numerical analysis, the optimal way to place grid points $W_j$ to minimize the error of linear interpolation for a function $u(W)$ is to make the spacing inversely proportional to the square root of the absolute value of the second derivative:$$\Delta W_j \propto \frac{1}{\sqrt{|u''(W_j)| + \epsilon}}$$(where $\epsilon > 0$ is a small constant to prevent division by zero in purely linear sections).
+
+>**Automatic Curvature-Adaptive Grid Generation**:
+>Rather than relying on user-specified grid transformations, this package can automatically construct an optimized non-uniform wealth grid $\mathcal{G}_{W, n}$. According to approximation theory, the error of linear interpolation is bounded by the second derivative of the interpolated function.To minimize interpolation errors across an arbitrary, user-defined utility function $u(W)$, we distribute the $G_w$ grid points such that the density of points at any wealth level $W$ is proportional to $\sqrt{|u''(W)|}$.We achieve this by defining a monitor function $M(W) = \sqrt{|u''(W)| + \epsilon}$, where $\epsilon > 0$ ensures a strictly positive density. The grid points $W_j$ are found by solving the following integral equation for each $j \in \{1, \ldots, G_w\}$:
+```math
+\frac{\int_{W_{n, \min}}^{W_j} M(W) dW}{\int_{W_{n, \min}}^{W_{n, \max}} M(W) dW} = \frac{j - 1}{G_w - 1}
+```
+>This ensures that regardless of whether the user inputs a CRRA, CARA, or Reference-Dependent utility function, the algorithm automatically allocates computational resources to the regions of highest economic sensitivity.
 - Now we do the forward simulation using $c_m, \omega_m = 0$ for all $m$. Is there a better choice?
 - Now we take the minimum and maximum of the simulated paths.
     Perhaps take 95th and 5th percentile (or something else)?
+
+On interpolation:
+- Which interpolation method to use? Now linear, but why not something else?
+- What if it falls _outside_ the grid? What then?
+
+On brute force:
+- Can we not do the same procedure but then use some hill-climbing algorithm?
+    More precisely, For the current fixed state $(W_n, Z_n)$, we define a continuous
+    objective function $f(c_n, \omega_n)$ that represents the right-hand side of the Bellman equation.
+    That would perhaps scale better with higher dimensions as well.
+- I can't exactly recall the "zooming" procedure that Servaas mentioned earlier.
