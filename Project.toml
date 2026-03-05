@@ -5,10 +5,15 @@ authors = ["Sliem el Ela <sliemelela@gmail.com>"]
 
 [deps]
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
-
+FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [compat]
 DocStringExtensions = "0.9.5"
+FastGaussQuadrature = "1.1.0"
+Interpolations = "0.16.2"
+LinearAlgebra = "1.12.0"
 Test = "1.11.0"
 julia = "1.11"
 

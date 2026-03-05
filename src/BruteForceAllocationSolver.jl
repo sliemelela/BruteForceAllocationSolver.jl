@@ -3,7 +3,7 @@ module BruteForceAllocationSolver
 using DocStringExtensions
 
 # Core Exports
-export temp
+export run
 
 # Plotting Exports
 
