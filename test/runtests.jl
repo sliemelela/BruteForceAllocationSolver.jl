@@ -3,29 +3,42 @@ using FastGaussQuadrature
 using Test
 
 @testset "Merton Benchmark Test" begin
-    # 1. Setup exactly like your run() script
+
+    # Define amount of timesteps, stepsize etc.
+    M = 10
+    dt = 1.0
+    β = 0.96
+
+    # Define utility function
     γ = 5.0
     u(x) = (x^(1 - γ))/(1 - γ)
 
-    G_w = 500
-    W_grid = exp.(collect(range(log(1.0), log(100.0), length=G_w)))
+    # Setup grid parameters
+    G_w, W_min, W_max = 500, 1.0, 100.0
+    G_c, c_min, c_max = 50, 0.01, 0.99
+    G_ω, ω_min, ω_max = 101, 0.0, 1.0
+
+    # Setup grids
+    W_grid = generate_log_spaced_grid(W_min, W_max, G_w)
     Z_grids = Vector{Float64}[]
-    c_grid = collect(range(0.01, 0.99, length=50))
-    omega_space = [[w] for w in range(0.0, 1.0, length=101)]
+    c_grid = collect(range(c_min, c_max, length=G_c))
+    omega_space = [[ω] for ω in range(ω_min, ω_max, length=G_ω)]
 
-    M = 10
-    β = 0.96
+    # Create nodes
+    Q = 10
+    ε_nodes, W_weights = gausshermite(Q, normalize=true)
+    ε_nodes = [[n] for n in ε_nodes]
 
-    nodes, weights = gausshermite(10)
-    ε_nodes = [[n * sqrt(2.0)] for n in nodes]
-    W_weights = weights ./ sqrt(pi)
+    # Dynamics of the state variables
+    r = 0.02
+    μ = 0.07
+    σ = 0.2
+    merton_transition = make_merton_transition(r, μ, σ, dt)
 
-    merton_transition = make_merton_transition(0.02, 0.07, 0.20, 1.0)
-
-    # 2. Inject the Strategies
+    # Inject the extrapolator
     crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
-    # 3. Run the solver
+    # Run the solver
     V, pol_c, pol_w = solve_dynamic_program(
         W_grid, Z_grids, c_grid, omega_space,
         ε_nodes, W_weights, merton_transition,
@@ -33,12 +46,10 @@ using Test
         standard_budget_constraint, crra_extrapolator
     )
 
-    # 4. Automate the validation!
-    analytical_w = (0.07 - 0.02) / (5.0 * 0.20^2) # 0.25
+    # Find analytical solution
+    analytical_w = (μ - r) / (γ * σ^2) # 0.25
 
     # Check if the middle of the grid matches the analytical solution
-    numerical_w = pol_w[50, 1][1]
-
     for W_idx in range(1, G_w), n in range(1, M)
         numerical_w = pol_w[W_idx, n][1]
         @test isapprox(numerical_w, analytical_w, atol=0.02)

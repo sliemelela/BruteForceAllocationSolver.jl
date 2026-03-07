@@ -18,7 +18,7 @@ export make_log_crra_extrapolator, log_budget_constraint
 export make_merton_transition
 
 # Export grid tools
-export generate_adaptive_grid
+export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
 
 # Include the separated files
 include("core.jl")

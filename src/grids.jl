@@ -40,3 +40,27 @@ function generate_adaptive_grid(u::Function, W_min::Float64, W_max::Float64, G_w
 
     return grid
 end
+
+
+"""
+    generate_linear_grid(min_val, max_val, N)
+
+Generates a standard uniformly spaced grid between `min_val` and `max_val` with `N` points.
+Useful for state variables (Z) or log-wealth (X).
+"""
+function generate_linear_grid(min_val::Float64, max_val::Float64, N::Int)
+    return collect(range(min_val, max_val, length=N))
+end
+
+"""
+    generate_log_spaced_grid(W_min, W_max, N)
+
+Generates a grid where the points are uniformly spaced in log-space, but returned in levels.
+This naturally clusters points near `W_min`.
+"""
+function generate_log_spaced_grid(W_min::Float64, W_max::Float64, N::Int)
+    if W_min <= 0.0
+        error("W_min must be strictly greater than 0 for a log-spaced grid.")
+    end
+    return exp.(collect(range(log(W_min), log(W_max), length=N)))
+end
