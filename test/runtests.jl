@@ -16,12 +16,7 @@ using Test
     ε_nodes = [[n * sqrt(2.0)] for n in nodes]
     W_weights = weights ./ sqrt(pi)
 
-    function merton_transition(Z::Vector{Float64}, ε::Vector{Float64})
-        r = 0.02; μ = 0.07; σ = 0.20; dt = 1.0
-        Rf = exp(r * dt)
-        Re = [exp((μ - 0.5 * σ^2) * dt + σ * sqrt(dt) * ε[1]) - Rf]
-        return Float64[], Re, Rf
-    end
+    merton_transition = make_merton_transition(0.02, 0.07, 0.20, 1.0)
 
     # 2. Inject the Strategies
     crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
@@ -66,12 +61,7 @@ end
     X_weights = weights ./ sqrt(pi)
 
     # 4. Market Dynamics (Remains identical!)
-    function merton_transition(Z::Vector{Float64}, ε::Vector{Float64})
-        r = 0.02; μ = 0.07; σ = 0.20; dt = 1.0
-        Rf = exp(r * dt)
-        Re = [exp((μ - 0.5 * σ^2) * dt + σ * sqrt(dt) * ε[1]) - Rf]
-        return Float64[], Re, Rf
-    end
+    merton_transition = make_merton_transition(0.02, 0.07, 0.20, 1.0)
 
     # 5. Inject the Log-Space Strategies
     log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)

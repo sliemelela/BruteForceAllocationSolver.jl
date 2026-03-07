@@ -14,12 +14,17 @@ export fractional_consumption, log_fractional_consumption, absolute_consumption
 export make_crra_extrapolator, standard_budget_constraint
 export make_log_crra_extrapolator, log_budget_constraint
 
+# Export the transition models
+export make_merton_transition
+
 # Export grid tools
 export generate_adaptive_grid
 
 # Include the separated files
 include("core.jl")
 include("strategies.jl")
+include("transitions.jl")
 include("grids.jl")
+
 
 end
