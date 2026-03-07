@@ -2,7 +2,7 @@ function evaluate_bellman_objective(
     W_n::Float64, Z_n::Vector{Float64}, c_n::Float64, ω_n::Vector{Float64},
     ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
     V_next, transition_model::Function, β::Float64, u::Function,
-    budget_constraint::Function, extrapolator::Function
+    compute_consumption::Function, budget_constraint::Function, extrapolator::Function
 )
     expected_future_value = 0.0
 
@@ -20,7 +20,8 @@ function evaluate_bellman_objective(
         expected_future_value += weight * extrapolator(W_next, Z_next, V_next)
     end
 
-    current_utility = c_n > 0.0 ? u(c_n * W_n) : -Inf
+    absolute_consumed = compute_consumption(W_n, c_n)
+    current_utility = c_n > 0.0 ? u(absolute_consumed) : -Inf
     return current_utility + β * expected_future_value
 end
 
@@ -28,7 +29,8 @@ function optimize_controls_brute_force(
     W_n::Float64, Z_n::Vector{Float64}, c_grid::Vector{Float64}, omega_space,
     ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
     V_next, transition_model::Function, β::Float64, u::Function,
-    budget_constraint::Function, extrapolator::Function
+    compute_consumption::Function, budget_constraint::Function,
+    extrapolator::Function
 )
     best_val = -Inf
     best_c = 0.0
@@ -38,7 +40,7 @@ function optimize_controls_brute_force(
         current_val = evaluate_bellman_objective(
             W_n, Z_n, c_n, ω_n, ε_nodes, W_weights,
             V_next, transition_model, β, u,
-            budget_constraint, extrapolator
+            compute_consumption, budget_constraint, extrapolator
         )
 
         if current_val > best_val
@@ -56,7 +58,7 @@ function solve_dynamic_program(
     c_grid::Vector{Float64}, omega_space::Vector{Vector{Float64}},
     ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
     transition_model::Function, M::Int, β::Float64, u::Function,
-    budget_constraint::Function, extrapolator::Function
+    compute_consumption::Function, budget_constraint::Function, extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
     V     = zeros(Float64, sz..., M + 1)
@@ -85,7 +87,7 @@ function solve_dynamic_program(
             best_val, best_c, best_ω = optimize_controls_brute_force(
                 W_n, Z_n, c_grid, omega_space, ε_nodes, W_weights,
                 V_next_interp, transition_model, β, u,
-                budget_constraint, extrapolator
+                compute_consumption, budget_constraint, extrapolator
             )
 
             V[idx, n]     = best_val

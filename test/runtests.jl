@@ -30,7 +30,7 @@ using Test
     V, pol_c, pol_w = solve_dynamic_program(
         W_grid, Z_grids, c_grid, omega_space,
         ε_nodes, W_weights, merton_transition,
-        10, 0.96, u,
+        10, 0.96, u, fractional_consumption,
         standard_budget_constraint, crra_extrapolator
     )
 
@@ -48,8 +48,8 @@ end
     # 1. Setup Parameters
     γ = 5.0
 
-    # Utility function adapted for log-wealth: u(X) = exp(X)^(1-γ) / (1-γ)
-    u_log(X) = (exp(X)^(1 - γ)) / (1 - γ)
+    # Utility function in wealth terms
+    u(X) = (X^(1 - γ)) / (1 - γ)
 
     # 2. The Log-Space Grid
     # Instead of an exponential grid for W, we just use a linear grid for X!
@@ -61,7 +61,7 @@ end
     omega_space = [[w] for w in range(0.0, 1.0, length=101)]
 
     # 3. Quadrature Setup
-    nodes, weights = gausshermite(50)
+    nodes, weights = gausshermite(10)
     ε_nodes = [[n * sqrt(2.0)] for n in nodes]
     X_weights = weights ./ sqrt(pi)
 
@@ -77,19 +77,20 @@ end
     log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
 
     # 6. Run the solver!
-    # Notice we pass `u_log` and our new `log_budget_constraint`
     V, pol_c, pol_w = solve_dynamic_program(
         X_grid, Z_grids, c_grid, omega_space,
         ε_nodes, X_weights, merton_transition,
-        10, 0.96, u_log,
+        10, 0.96, u, log_fractional_consumption,
         log_budget_constraint, log_extrapolator
     )
 
     # 7. Validate
     analytical_w = (0.07 - 0.02) / (5.0 * 0.20^2) # 0.25
     numerical_w = pol_w[50, 1][1]
+    numerical_w_2 = pol_w[95, 1][1]
 
     display(pol_w)
 
     @test isapprox(numerical_w, analytical_w, atol=0.02)
+    @test isapprox(numerical_w_2, analytical_w, atol=0.02)
 end

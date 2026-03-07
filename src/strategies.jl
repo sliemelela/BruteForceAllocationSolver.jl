@@ -1,4 +1,32 @@
 """
+    fractional_consumption(W, c)
+
+Used when the state is raw Wealth, and the control `c` is a fraction (0 to 1).
+"""
+function fractional_consumption(W::Float64, c::Float64)
+    return c * W
+end
+
+"""
+    log_fractional_consumption(X, c)
+
+Used when the state is Log-Wealth (X), and the control `c` is a fraction (0 to 1).
+"""
+function log_fractional_consumption(X::Float64, c::Float64)
+    return c * exp(X)
+end
+
+"""
+    absolute_consumption(state, c)
+
+Used when the control `c` is an absolute dollar amount, rather than a fraction.
+(The state is ignored because c is already the actual consumption).
+"""
+function absolute_consumption(state::Float64, c::Float64)
+    return c
+end
+
+"""
     standard_budget_constraint(W, c, ω, R_e, R_base)
 
 The standard multiplicative budget constraint for wealth evolution.
