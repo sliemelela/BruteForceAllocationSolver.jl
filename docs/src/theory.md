@@ -319,7 +319,6 @@ are the realized next-period wealth and state variables given the shock
 $\boldsymbol{\varepsilon}_j$.
 This interpolated value $\hat{V}_{n+1}$ is then used directly in the Bellman maximization step.
 
-
 ### Grid Selection
 Before the algorithm runs, we first do a forward simulation to be able to choose appropriate
 grids for the state space $Z_m = (Z^1_m, \ldots, Z^K_m)$ and wealth space $W_m$ at each time $m = 1, \ldots, M$.

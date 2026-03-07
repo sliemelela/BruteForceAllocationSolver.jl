@@ -1,13 +1,30 @@
 module BruteForceAllocationSolver
 
-using DocStringExtensions
+using LinearAlgebra
+using ForwardDiff
+using Interpolations
+using Integrals
+using FastGaussQuadrature
 
-# Core Exports
-export temp
+# Export the core solver
+export solve_dynamic_program
 
-# Plotting Exports
+# Export the built-in strategies
+export fractional_consumption, log_fractional_consumption, absolute_consumption
+export make_crra_extrapolator, standard_budget_constraint
+export make_log_crra_extrapolator, log_budget_constraint
 
-# Includes
-include("temp.jl")
+# Export the transition models
+export make_merton_transition
+
+# Export grid tools
+export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
+
+# Include the separated files
+include("core.jl")
+include("strategies.jl")
+include("transitions.jl")
+include("grids.jl")
+
 
 end
