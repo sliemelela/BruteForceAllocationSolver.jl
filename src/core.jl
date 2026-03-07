@@ -67,8 +67,9 @@ function solve_dynamic_program(
 
     println("Setting terminal conditions...")
     for idx in CartesianIndices(sz)
-        W_terminal = W_grid[idx[1]]
-        V[idx, M+1] = u(W_terminal)
+        state_terminal = W_grid[idx[1]]
+        C_terminal = compute_consumption(state_terminal, 1.0)
+        V[idx, M+1] = u(C_terminal)
     end
 
     println("Starting backwards recursion from step $M down to 1...")

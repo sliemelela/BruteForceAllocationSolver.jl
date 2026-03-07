@@ -7,7 +7,7 @@ using Test
     γ = 5.0
     u(x) = (x^(1 - γ))/(1 - γ)
 
-    W_grid = exp.(collect(range(log(1.0), log(100.0), length=100)))
+    W_grid = exp.(collect(range(log(1.0), log(100.0), length=500)))
     Z_grids = Vector{Float64}[]
     c_grid = collect(range(0.01, 0.99, length=50))
     omega_space = [[w] for w in range(0.0, 1.0, length=101)]
@@ -54,14 +54,14 @@ end
     # 2. The Log-Space Grid
     # Instead of an exponential grid for W, we just use a linear grid for X!
     # log(0.01) ≈ -4.6, log(100.0) ≈ 4.6
-    X_grid = collect(range(log(0.01), log(100.0), length=100))
+    X_grid = collect(range(log(0.01), log(100.0), length=500))
     Z_grids = Vector{Float64}[]
 
     c_grid = collect(range(0.01, 0.99, length=50))
     omega_space = [[w] for w in range(0.0, 1.0, length=101)]
 
     # 3. Quadrature Setup
-    nodes, weights = gausshermite(10)
+    nodes, weights = gausshermite(5)
     ε_nodes = [[n * sqrt(2.0)] for n in nodes]
     X_weights = weights ./ sqrt(pi)
 
@@ -86,8 +86,8 @@ end
 
     # 7. Validate
     analytical_w = (0.07 - 0.02) / (5.0 * 0.20^2) # 0.25
-    numerical_w = pol_w[50, 1][1]
-    numerical_w_2 = pol_w[95, 1][1]
+    numerical_w = pol_w[250, 1][1]
+    numerical_w_2 = pol_w[490, 1][1]
 
     display(pol_w)
 

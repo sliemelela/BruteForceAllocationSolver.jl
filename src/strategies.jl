@@ -44,7 +44,11 @@ Here, the state variable `X` represents log(W).
 function log_budget_constraint(X, c, ω, R_e, R_base)
     # X_next = X + log(1 - c) + log(Portfolio Return)
     # We use max(..., 1e-10) to prevent log(negative) if extreme shocks occur
-    port_return = max(dot(ω, R_e) + R_base, 1e-10)
+    port_return = dot(ω, R_e) + R_base
+
+    if port_return <= 0.0
+        return -Inf
+    end
 
     return X + log(1.0 - c) + log(port_return)
 end
