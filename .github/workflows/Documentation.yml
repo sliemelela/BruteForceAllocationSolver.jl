@@ -16,7 +16,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1.12' # Important: Must be 1.12+ for workspaces
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
 
       # Installation process
       - name: Install dependencies
