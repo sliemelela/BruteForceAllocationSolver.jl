@@ -362,8 +362,9 @@ To obtain values for $W_m$, we use the simple strategy $c_m = 0$ and $\omega_m =
 for all $m = 1, \ldots, M$. We then choose a *fixed* size for the grids.
 
 #### State variables
-
-Let $G_z, G_w \in \mathbb{N}$ denote the sizes of the state space grid and principal state (wealth) space grid respectively. After the forward simulation provides the range of possible outcomes, we define the discretization.
+Let $G_z, G_w \in \mathbb{N}$ denote the sizes of the state space grid and principal state
+(wealth) space grid respectively.
+After the forward simulation provides the range of possible outcomes, we define the discretization.
 
 For each auxiliary state variable $Z^{i}_n$, we construct a grid between $Z^{i}_{n, \min}$ and $Z^{i}_{n, \max}$. While a uniform linear grid is standard, the package provides several built-in generators for the principal state variable $W_n$:
 
@@ -448,12 +449,41 @@ Calculate the current objective value for these controls and select the maximum
     V_n(W_n, Z_n) \approx \max_{c_n, \omega_n} \left\{ u(C_n) + \beta \sum_{j=1}^{Q^D} W_j \cdot \hat{V}_{n+1}(W_{n+1, j}, Z_{n+1, j}) \right\}
 
 ```
-
 #### Interpolation and Extrapolation
+If the maximum has been calculated for all grid points $\mathcal{G}_{W, n} \times \mathcal{G}_{Z, n}$,
+use multidimensional linear interpolation to create a continuous function $\hat{V}_{n}(W_{n}, Z_{n})$.
 
-If the maximum has been calculated for all grid points $\mathcal{G}_{W, n} \times \mathcal{G}_{Z, n}$, use multidimensional linear interpolation to create a continuous function $\hat{V}_{n}(W_{n}, Z_{n})$.
+Crucially, what happens if a simulated market shock causes $W_{n+1, j}$ to evaluate to a point
+*outside* the defined boundaries of the grid $\mathcal{G}_{W, n}$?
 
-Crucially, what happens if $W_{n+1, j}$ evaluates to a point *outside* the grid $\mathcal{G}_{W, n}$? Standard linear extrapolation fails for highly curved utility functions (like CRRA), causing artificial risk-taking at the boundaries. To solve this, the package abstracts extrapolation via user-provided strategies (e.g., `make_crra_extrapolator` and `make_log_crra_extrapolator`). These closures stitch the exact asymptotic economic curvature onto the grid boundaries, ensuring stability even under extreme simulated market shocks.
+Standard linear extrapolation fails catastrophically for highly curved utility functions like CRRA.
+By simply continuing the slope from the edge of the grid, linear extrapolation creates two silent economic failures:
+1. **The Upside Trap:** As wealth goes to infinity, marginal utility should decay to zero.
+    A straight line, however, shoots upward indefinitely, potentially crossing into positive utility
+    (which is mathematically invalid for $\gamma > 1$). The agent perceives infinite reward for taking infinite risk.
+2. **The Downside Trap:** As wealth approaches zero, the penalty should plummet exponentially
+    toward $-\infty$. A straight line gently slopes downward,
+    causing the agent to massively underestimate the penalty of bankruptcy and take reckless leverage.
+
+To solve this, the package abstracts extrapolation via user-provided strategies that abandon linear
+rays and instead mathematically "stitch" the exact asymptotic economic curvature onto the grid boundaries.
+We provide two standard closures for this:
+* **`make_crra_extrapolator` (Absolute Wealth):** Leverages the scale-invariance property of CRRA utility. If the agent's wealth falls outside the grid at $W_{bound}$, the strategy evaluates the known value at the boundary $V(W_{bound})$ and scales it exactly by the CRRA ratio:
+```math
+V(W_\text{next}) = V(W_\text{bound}) \times \left( \frac{W_\text{next}}{W_\text{bound}} \right)^{1-\gamma}
+```
+
+* **`make_log_crra_extrapolator` (Log-Wealth):** When the state variable is formulated in
+    logs ($X = \log W$), the value function takes the shape of a steep exponential curve
+    $V(X) \propto e^{(1-\gamma)X}$. Linear extrapolation in log-space is equally dangerous.
+    This strategy translates the CRRA boundary scaling factor into log-space, applying an
+    exponential penalty or decay:
+```math
+V(X_\text{next}) = V(X_\text{bound}) \times \exp\Big((1-\gamma)(X_\text{next} - X_\text{bound})\Big)
+```
+
+By wrapping these mathematical rules in closures and injecting them into the Bellman objective,
+the algorithm ensures perfect numerical stability and rational economic behavior even under extreme simulated market shocks.
 
 #### Policy Storage
 
