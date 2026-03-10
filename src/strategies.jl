@@ -54,9 +54,24 @@ function log_budget_constraint(X, c, ω, R_e, R_base)
 end
 
 """
-    make_crra_extrapolator(W_min, W_max, γ)
+    make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
 
-Creates an extrapolation strategy perfectly scaled for CRRA utility functions.
+Creates an extrapolation strategy perfectly scaled for Constant Relative Risk Aversion (CRRA)
+utility functions operating on an absolute wealth grid.
+
+Standard linear extrapolation fails for highly curved CRRA value functions, leading to
+artificial risk-taking at the grid boundaries. This factory function returns a closure that enforces
+the analytical property of CRRA models: the value function strictly scales proportional
+to ``(W_{next} / W_{bound})^{1-\\gamma}``.
+
+# Arguments
+- `W_min::Float64`: The absolute minimum boundary of the wealth grid.
+- `W_max::Float64`: The absolute maximum boundary of the wealth grid.
+- `γ::Float64`: The coefficient of relative risk aversion.
+
+# Returns
+- `Function`: A closure with the signature `(W_next::Float64, Z_next::Vector{Float64}, V_next_interp) -> Float64`
+  that safely evaluates future values inside or outside the defined grid bounds.
 """
 function make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
     return function(W_next::Float64, Z_next::Vector{Float64}, V_next_interp)
@@ -72,10 +87,23 @@ function make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
 end
 
 """
-    make_log_crra_extrapolator(X_min, X_max, γ)
+    make_log_crra_extrapolator(X_min::Float64, X_max::Float64, γ::Float64)
 
-Creates an extrapolation strategy perfectly scaled for CRRA utility
-when the state variable is log(Wealth).
+Creates an extrapolation strategy perfectly scaled for CRRA utility when the principal
+state variable is formulated in log-wealth space (``X = \\log(W)``).
+
+This function translates the standard CRRA boundary scaling factor into log-space.
+The absolute scaling ratio ``(W_{next} / W_{bound})^{1-\\gamma}`` mathematically becomes
+``\\exp((1-\\gamma)(X_{next} - X_{bound}))``.
+
+# Arguments
+- `X_min::Float64`: The minimum boundary of the log-wealth grid.
+- `X_max::Float64`: The maximum boundary of the log-wealth grid.
+- `γ::Float64`: The coefficient of relative risk aversion.
+
+# Returns
+- `Function`: A closure with the signature `(X_next::Float64, Z_next::Vector{Float64}, V_next_interp) -> Float64`
+  that safely evaluates future values inside or outside the defined log-grid bounds.
 """
 function make_log_crra_extrapolator(X_min::Float64, X_max::Float64, γ::Float64)
     return function(X_next::Float64, Z_next::Vector{Float64}, V_next_interp)
