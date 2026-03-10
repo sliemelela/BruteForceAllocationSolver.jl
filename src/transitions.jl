@@ -36,3 +36,53 @@ function make_merton_transition(r::Float64, μ::Float64, σ::Float64, dt::Float6
         return Float64[], Re, Rf
     end
 end
+
+"""
+    make_stochastic_r_constant_mu_transition(κ, θ, σ_r, μ, σ_S, ρ, dt)
+
+Transition model with a mean-reverting stochastic interest rate and a risky stock
+with a CONSTANT expected return μ. (Excess return shrinks as r rises).
+"""
+function make_stochastic_r_constant_mu_transition(κ::Float64, θ::Float64, σ_r::Float64,
+                                                  μ::Float64, σ_S::Float64, ρ::Float64, dt::Float64)
+    return function(Z::Vector{Float64}, ε::Vector{Float64})
+        r_n = Z[1]
+        ε_r, ε_S = ε[1], ε[2]
+
+        # 1. State Variable Evolution: Vasicek model
+        r_next = r_n + κ * (θ - r_n) * dt + σ_r * sqrt(dt) * ε_r
+        Z_next = [r_next]
+
+        # 2. Market Returns
+        Rf = exp(r_n * dt)
+        R_S = exp((μ - 0.5 * σ_S^2) * dt + σ_S * sqrt(dt) * ε_S)
+        Re = [R_S - Rf]
+
+        return Z_next, Re, Rf
+    end
+end
+
+
+"""
+    make_stochastic_r_constant_premium_transition(κ, θ, σ_r, λ_S, σ_S, ρ, dt)
+
+Transition model with a stochastic interest rate and a risky stock with a
+CONSTANT risk premium. (Expected return is r_t + λ_S * σ_S).
+"""
+function make_stochastic_r_constant_premium_transition(κ::Float64, θ::Float64, σ_r::Float64,
+                                                       λ_S::Float64, σ_S::Float64, ρ::Float64, dt::Float64)
+    return function(Z::Vector{Float64}, ε::Vector{Float64})
+        r_n = Z[1]
+        ε_r, ε_S = ε[1], ε[2]
+
+        r_next = r_n + κ * (θ - r_n) * dt + σ_r * sqrt(dt) * ε_r
+        Z_next = [r_next]
+
+        Rf = exp(r_n * dt)
+        # Expected return strictly scales with the current risk-free rate
+        R_S = exp((r_n + λ_S * σ_S - 0.5 * σ_S^2) * dt + σ_S * sqrt(dt) * ε_S)
+        Re = [R_S - Rf]
+
+        return Z_next, Re, Rf
+    end
+end
