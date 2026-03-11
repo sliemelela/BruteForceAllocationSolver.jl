@@ -101,3 +101,94 @@ end
         @test isapprox(numerical_w, analytical_w, atol=0.02)
     end
 end
+
+
+@testset "Stochastic Interest Rate Models (2D Quadrature)" begin
+    # 1. Base Parameters
+    M = 5; dt = 1.0; β = 0.96; γ = 5.0
+    u(X) = (X^(1 - γ)) / (1 - γ)
+
+    # 2. Set up Grids (Using Log-Wealth for extreme speed and stability)
+    G_X = 100
+    X_grid = generate_linear_grid(log(0.01), log(100.0), G_X)
+
+    # NEW: We now have an auxiliary state variable Z! (The interest rate r)
+    G_r = 11
+    Z_grids = [generate_linear_grid(0.0, 0.10, G_r)] # Grid from 0% to 10%
+
+    c_grid = generate_linear_grid(0.01, 0.99, 50)
+    omega_space = [[w] for w in generate_linear_grid(0.0, 1.0, 101)]
+
+    # 3. 2D Quadrature Integration Setup
+    Q = 10 # 5 nodes per dimension = 25 total nodes
+    nodes, weights = gausshermite(Q)
+    nodes_std = nodes .* sqrt(2.0)
+    weights_std = weights ./ sqrt(pi)
+
+    ρ = 0.0 # Correlation between interest rate and stock shocks
+    ε_nodes = Vector{Vector{Float64}}()
+    W_weights = Vector{Float64}()
+
+    # Create the Cartesian product of the nodes and apply Cholesky decomposition
+    for i in 1:Q, j in 1:Q
+        z1 = nodes_std[i]
+        z2 = nodes_std[j]
+
+        e_r = z1
+        e_S = ρ * z1 + sqrt(1.0 - ρ^2) * z2
+
+        push!(ε_nodes, [e_r, e_S])
+        push!(W_weights, weights_std[i] * weights_std[j])
+    end
+
+    # 4. Shared Economic Strategies
+    log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
+
+    # =========================================================================
+    # Test Case A: Constant Mu (Optimal weight should SHRINK as r rises)
+    # =========================================================================
+    κ = 0.1; θ = 0.03; σ_r = 0.01
+    μ = 0.07; σ_S = 0.20
+
+    transition_mu = make_stochastic_r_constant_mu_transition(κ, θ, σ_r, μ, σ_S, ρ, dt)
+
+    _, _, pol_w_mu = solve_dynamic_program(
+        X_grid, Z_grids, c_grid, omega_space,
+        ε_nodes, W_weights, transition_mu,
+        M, β, u, log_fractional_consumption,
+        log_budget_constraint, log_extrapolator
+    )
+
+    # Validate: Look at the middle wealth point, at Time = 1
+    # As the interest rate grid goes from 0.0 to 0.10, the weight should drop.
+    weight_at_r_0  = pol_w_mu[50, 1, 1][1]  # r = 0.0%
+    weight_at_r_10 = pol_w_mu[50, 11, 1][1] # r = 10.0%
+
+    @test weight_at_r_0 > weight_at_r_10
+
+    # Specifically, at r = 0.02, it should perfectly match the Merton share
+    analytical_merton_02 = (0.07 - 0.02) / (γ * σ_S^2) # = 0.25
+    @test isapprox(pol_w_mu[50, 3, 1][1], analytical_merton_02, atol=0.03)
+
+    # =========================================================================
+    # Test Case B: Constant Risk Premium (Optimal weight should be FLAT)
+    # =========================================================================
+    # We set λ_S * σ_S = 0.05, so expected excess return is always 0.05
+    λ_S = 0.25
+
+    transition_premium = make_stochastic_r_constant_premium_transition(κ, θ, σ_r, λ_S, σ_S, ρ, dt)
+
+    _, _, pol_w_premium = solve_dynamic_program(
+        X_grid, Z_grids, c_grid, omega_space,
+        ε_nodes, W_weights, transition_premium,
+        M, β, u, log_fractional_consumption,
+        log_budget_constraint, log_extrapolator
+    )
+
+    # Validate: The optimal weight should be the exact same regardless of the state of r!
+    analytical_premium = (λ_S * σ_S) / (γ * σ_S^2) # = 0.05 / (5 * 0.04) = 0.25
+
+    for r_idx in 1:G_r
+        @test isapprox(pol_w_premium[50, r_idx, 1][1], analytical_premium, atol=0.03)
+    end
+end

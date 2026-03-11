@@ -18,6 +18,7 @@ export make_log_crra_extrapolator, log_budget_constraint
 
 # Export the transition models
 export make_merton_transition
+export make_stochastic_r_constant_mu_transition, make_stochastic_r_constant_premium_transition
 
 # Export grid tools
 export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
