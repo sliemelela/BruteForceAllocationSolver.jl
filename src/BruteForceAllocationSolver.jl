@@ -19,6 +19,7 @@ export make_log_crra_extrapolator, log_budget_constraint
 # Export the transition models
 export make_merton_transition
 export make_stochastic_r_constant_mu_transition, make_stochastic_r_constant_premium_transition
+export make_stochastic_r_bond_stock_transition
 
 # Export grid tools
 export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
@@ -27,6 +28,7 @@ export generate_gaussian_shocks
 # Export the analysis and plotting tools
 export create_policy_interpolators
 export plot_mean_with_bounds, plot_shock_comparison, plot_policy_vs_state
+export plot_policy_heatmap, plot_value_function, plot_paths_overlay
 
 # Include the separated files
 include("core.jl")

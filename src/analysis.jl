@@ -34,7 +34,7 @@ end
 Creates a CairoMakie Figure showing the mean of a simulated variable (e.g., consumption
 or portfolio weight) over time, surrounded by a shaded 10th-90th percentile band.
 """
-function plot_mean_with_bounds(sim_data::Matrix{Float64}; title="Strategy over Time", ylabel="Value", color=:blue)
+function plot_mean_with_bounds(sim_data::AbstractMatrix{Float64}; title="Strategy over Time", ylabel="Value", color=:blue)
     M = size(sim_data, 2)
     times = 1:M
 
@@ -60,7 +60,7 @@ end
 
 Compares the mean trajectory of a baseline simulation against a shocked scenario.
 """
-function plot_shock_comparison(baseline_sim::Matrix{Float64}, shocked_sim::Matrix{Float64};
+function plot_shock_comparison(baseline_sim::AbstractMatrix{Float64}, shocked_sim::AbstractMatrix{Float64};
                                shock_time=nothing, title="Shock Comparison", ylabel="Value")
     M = size(baseline_sim, 2)
     times = 1:M
@@ -108,6 +108,107 @@ function plot_policy_vs_state(pol_matrix, W_grid, Z_grids, target_time::Int;
         ax = Axis(fig[1, 1], title="Policy vs State Z (t=$target_time)", xlabel="State Variable (Z)", ylabel=ylabel)
         lines!(ax, Z_grids[1], y_data, linewidth=3, color=:darkorange)
     end
+
+    return fig
+end
+
+"""
+    plot_policy_heatmap(pol_matrix, W_grid, Z_grids, target_time; ...)
+
+Creates a 2D contour plot (heatmap) showing the optimal policy choice against
+both Wealth (W) and an auxiliary state variable (Z) at a specific timestep.
+"""
+function plot_policy_heatmap(pol_matrix, W_grid, Z_grids, target_time::Int;
+                             fixed_Z_idx=1, title="Policy Heatmap",
+                             xlabel="Wealth (W)", ylabel="State Variable (Z)")
+
+    fig = Figure(size = (800, 600))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    # Assumes at least one auxiliary Z grid exists
+    Z_grid = Z_grids[1]
+
+    # Extract the 2D slice for the chosen timestep
+    slice_2d = [pol_matrix[w, z, target_time] for w in 1:length(W_grid),
+                z in 1:length(Z_grid)]
+
+    # Generate the filled contour
+    co = contourf!(ax, W_grid, Z_grid, slice_2d, colormap=:viridis, levels=20)
+    Colorbar(fig[1, 2], co, label="Policy Value")
+
+    return fig
+end
+
+"""
+    plot_value_function(V_matrix, W_grid, timesteps; ...)
+
+Plots the value function curve against Wealth at specific timesteps.
+Useful for verifying that boundary extrapolators stitch perfectly without kinks.
+"""
+function plot_value_function(V_matrix, W_grid, timesteps::Vector{Int};
+                             fixed_Z_idx=1, title="Value Function V(W)",
+                             xlabel="Wealth (W)", ylabel="Expected Utility")
+
+    fig = Figure(size = (800, 400))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    # Generate distinct colors for each timestep line
+    colors = cgrad(:tab10, length(timesteps), categorical=true)
+
+    for (i, t) in enumerate(timesteps)
+        # Handle multi-dimensional V (assumes 1 auxiliary state for now)
+        y_data = ndims(V_matrix) == 2 ?
+                 V_matrix[:, t] : V_matrix[:, fixed_Z_idx, t]
+
+        lines!(ax, W_grid, y_data, linewidth=3, color=colors[i], label="t = $t")
+    end
+
+    axislegend(ax, position=:rb) # Right-Bottom
+
+    return fig
+end
+
+"""
+    plot_paths_overlay(sim_data::Matrix{Float64}; ...)
+
+Plots individual Monte Carlo paths overlaid on the mean trajectory and
+confidence bounds to visualize the actual volatility and skewness.
+"""
+function plot_paths_overlay(sim_data::AbstractMatrix{Float64};
+                            num_paths=20, title="Simulated Paths Overlay",
+                            xlabel="Time (Steps)", ylabel="Value",
+                            line_color=:dodgerblue, mean_color=:black,
+                            band_color=(:black, 0.1))
+
+    sims, M = size(sim_data)
+    times = 1:M
+
+    fig = Figure(size = (800, 400))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    # Calculate statistics
+    mean_path = vec(mean(sim_data, dims=1))
+    p10 = [quantile(sim_data[:, t], 0.10) for t in times]
+    p90 = [quantile(sim_data[:, t], 0.90) for t in times]
+
+    # Plot the confidence band first (so it sits in the background)
+    band!(ax, times, p10, p90, color=band_color, label="10th-90th Percentile")
+
+    # Randomly sample paths to avoid overwhelming the plot
+    n_plot = min(sims, num_paths)
+    sampled_indices = rand(1:sims, n_plot)
+
+    # Plot the individual "spaghetti" lines with high transparency
+    for (idx, i) in enumerate(sampled_indices)
+        # Only attach the label to the first line to keep the legend clean
+        lbl = idx == 1 ? "Sampled Paths" : nothing
+        lines!(ax, times, sim_data[i, :], color=(line_color, 0.15), linewidth=1.5, label=lbl)
+    end
+
+    # Plot the mean as a thick solid line on top
+    lines!(ax, times, mean_path, color=mean_color, linewidth=3, label="Mean")
+
+    axislegend(ax, position=:rt)
 
     return fig
 end
