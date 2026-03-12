@@ -22,6 +22,7 @@ export make_stochastic_r_constant_mu_transition, make_stochastic_r_constant_prem
 
 # Export grid tools
 export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
+export generate_gaussian_shocks
 
 # Export the analysis and plotting tools
 export create_policy_interpolators
