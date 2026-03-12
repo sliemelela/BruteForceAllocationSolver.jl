@@ -86,3 +86,46 @@ function make_stochastic_r_constant_premium_transition(κ::Float64, θ::Float64,
         return Z_next, Re, Rf
     end
 end
+
+
+"""
+    make_stochastic_r_bond_stock_transition(κ, θ, σ_r, λ_r, τ, λ_S, σ_S, ρ, dt)
+
+Transition model with a stochastic interest rate, a rolling nominal bond with
+constant time-to-maturity `τ`, and a risky stock with a constant risk premium.
+
+Returns:
+1. The next period's interest rate `r_next`.
+2. The excess returns of the nominal bond and the stock (a 2-element vector).
+3. The gross risk-free rate.
+"""
+function make_stochastic_r_bond_stock_transition(
+    κ::Float64, θ::Float64, σ_r::Float64, λ_r::Float64, τ::Float64,
+    λ_S::Float64, σ_S::Float64, ρ::Float64, dt::Float64
+)
+    # Precompute the bond duration (B_r) and its constant volatility
+    B_r = abs(κ) < 1e-8 ? τ : (1.0 - exp(-κ * τ)) / κ
+    bond_vol = -B_r * σ_r # Note the negative sign from your SDE!
+
+    return function(Z::Vector{Float64}, ε::Vector{Float64})
+        r_n = Z[1]
+        ε_r, ε_S = ε[1], ε[2]
+
+        # 1. State Variable Evolution: Vasicek model
+        r_next = r_n + κ * (θ - r_n) * dt + σ_r * sqrt(dt) * ε_r
+        Z_next = [r_next]
+
+        # 2. Market Returns
+        Rf = exp(r_n * dt)
+
+        # Nominal Bond Return (Drift = r_n - λ_r * B_r * σ_r)
+        R_bond = exp((r_n - λ_r * B_r * σ_r - 0.5 * bond_vol^2) * dt + bond_vol * sqrt(dt) * ε_r)
+
+        # Stock Return (Constant Premium)
+        R_S = exp((r_n + λ_S * σ_S - 0.5 * σ_S^2) * dt + σ_S * sqrt(dt) * ε_S)
+
+        Re = [R_bond - Rf, R_S - Rf]
+
+        return Z_next, Re, Rf
+    end
+end
