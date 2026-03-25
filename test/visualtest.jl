@@ -48,7 +48,7 @@ println("Solving & Simulating Test Case 1 (Merton)...")
 # 1. DP Setup & Solve
 M, dt, β, γ = 10, 1.0, 0.96, 5.0
 u(x) = (x^(1 - γ))/(1 - γ)
-W_grid = generate_log_spaced_grid(1.0, 100.0, 200)
+W_grid = generate_log_spaced_grid(1.0, 100.0, 300)
 c_grid = generate_linear_grid(0.01, 0.99, 50)
 omega_space = [[ω] for ω in generate_linear_grid(0.0, 1.0, 101)]
 
