@@ -212,3 +212,70 @@ function plot_paths_overlay(sim_data::AbstractMatrix{Float64};
 
     return fig
 end
+
+"""
+    plot_objective_curve(x_vals, y_vals; title="", xlabel="", ylabel="", color=:purple)
+
+Plots a 2D cross-section of the Bellman objective function to verify that the
+numerical grid captures the true parabolic maximum without clipping at the boundaries.
+"""
+function plot_objective_curve(x_vals::AbstractVector, y_vals::AbstractVector;
+                              title="Objective Function", xlabel="Weight",
+                              ylabel="Expected Utility", color=:purple)
+    fig = Figure(size = (800, 400))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    # Filter out -Inf values so CairoMakie doesn't complain
+    valid_idx = isfinite.(y_vals)
+    clean_x = x_vals[valid_idx]
+    clean_y = y_vals[valid_idx]
+
+    lines!(ax, clean_x, clean_y, linewidth=3, color=color)
+
+    if !isempty(clean_y)
+        max_idx = argmax(clean_y)
+        scatter!(ax, [clean_x[max_idx]], [clean_y[max_idx]],
+                 color=:red, markersize=15, label="Numerical Maximum")
+        axislegend(ax, position=:rt)
+    end
+
+    return fig
+end
+
+"""
+    plot_deterministic_glidepath(times, wN_vals, wS_vals; ...)
+
+Plots the exact optimal portfolio weights over time for a strictly fixed state
+(e.g., average wealth, average interest rate, average inflation). This isolates
+the pure life-cycle "glidepath" effect from the noise of simulated market shocks.
+"""
+function plot_deterministic_glidepath(times::AbstractVector, wN_vals::AbstractVector, wS_vals::AbstractVector;
+                                      title="Deterministic Target-Date Glidepath",
+                                      xlabel="Time (Steps)", ylabel="Portfolio Weight")
+    fig = Figure(size = (800, 400))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    lines!(ax, times, wN_vals, linewidth=3, color=:blue, label="Nominal Bond Weight")
+    lines!(ax, times, wS_vals, linewidth=3, color=:green, label="Stock Weight")
+
+    axislegend(ax, position=:rt)
+    return fig
+end
+
+"""
+    plot_wealth_composition(times, W_vals, H_vals; ...)
+
+Plots Financial Wealth (W) against the present value of Human Capital (H)
+over time to contextualize portfolio shifts as human capital depletes.
+"""
+function plot_wealth_composition(times::AbstractVector, W_vals::AbstractVector, H_vals::AbstractVector;
+                                 title="Wealth Composition Over Time", xlabel="Time (Steps)", ylabel="Value")
+    fig = Figure(size = (800, 400))
+    ax = Axis(fig[1, 1], title=title, xlabel=xlabel, ylabel=ylabel)
+
+    lines!(ax, times, W_vals, linewidth=3, color=:dodgerblue, label="Mean Financial Wealth (W)")
+    lines!(ax, times, H_vals, linewidth=3, color=:darkorange, label="Human Capital (H)")
+
+    axislegend(ax, position=:rc)
+    return fig
+end
