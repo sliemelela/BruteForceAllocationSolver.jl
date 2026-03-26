@@ -1,18 +1,17 @@
 
 @testset "Stochastic Interest Rate Models (2D Quadrature)" begin
     # 1. Base Parameters
-    M, dt, β, γ = 5, 1.0, 0.96, 5.0
+    M, dt, γ = 5, 1.0, 5.0
     u(X) = (X^(1 - γ)) / (1 - γ)
 
     # 2. Set up Grids
-    G_X = 100
+    G_X = 200
     X_grid = generate_linear_grid(log(0.01), log(100.0), G_X)
 
     # Auxiliary state variable Z (The interest rate r)
     G_r = 11
     Z_grids = [generate_linear_grid(0.0, 0.10, G_r)]
 
-    c_grid = generate_linear_grid(0.01, 0.99, 50)
     omega_space = [[w] for w in generate_linear_grid(0.0, 1.0, 101)]
 
     # 3. 2D Quadrature Integration Setup
@@ -35,11 +34,10 @@
         κ, θ, σ_r, μ, σ_S, ρ_val, dt
     )
 
-    _, _, pol_w_mu = solve_dynamic_program(
-        X_grid, Z_grids, c_grid, omega_space,
+    _, pol_w_mu = solve_dynamic_program(
+        X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_mu,
-        M, β, u, log_fractional_consumption,
-        log_budget_constraint, log_extrapolator
+        M, u, exp, log_budget_constraint, log_extrapolator
     )
 
     # Validate
@@ -61,11 +59,10 @@
         κ, θ, σ_r, λ_S, σ_S, ρ_val, dt
     )
 
-    _, _, pol_w_premium = solve_dynamic_program(
-        X_grid, Z_grids, c_grid, omega_space,
+    _, pol_w_premium = solve_dynamic_program(
+        X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_premium,
-        M, β, u, log_fractional_consumption,
-        log_budget_constraint, log_extrapolator
+        M, u, exp, log_budget_constraint, log_extrapolator
     )
 
     # Validate

@@ -260,7 +260,7 @@ function solve_dynamic_program(
     omega_space::Vector{Vector{Float64}},
     ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
     transition_model::Function, M::Int, u::Function,
-    budget_constraint::Function, extrapolator::Function
+    state_to_wealth::Function, budget_constraint::Function, extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
     V     = zeros(Float64, sz..., M + 1)
@@ -269,7 +269,8 @@ function solve_dynamic_program(
     println("Setting terminal conditions (Terminal Wealth)...")
     for idx in CartesianIndices(sz)
         state_terminal = W_grid[idx[1]]
-        V[idx, M+1] = u(state_terminal)
+        actual_wealth = state_to_wealth(state_terminal)
+        V[idx, M+1] = u(actual_wealth)
     end
 
     println("Starting backwards recursion from step $M down to 1...")

@@ -30,7 +30,7 @@
     V_term, pol_w_term = solve_dynamic_program(
         W_grid, Z_grids, omega_space,
         ε_nodes, W_weights, merton_transition,
-        M, u, standard_budget_constraint, crra_ex
+        M, u, identity, standard_budget_constraint, crra_ex
     )
 
     # 6. Validate Output Structure
