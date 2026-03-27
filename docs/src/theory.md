@@ -272,7 +272,6 @@ The third equality follows from the tower property of conditional expectations.
 The last equality follows from the definition of the value function at time $n + 1$.
 
 ### Gauss-Hermite Quadrature
-
 Using the Bellman equation, we are now tasked to be evaluate
 
 ```math
