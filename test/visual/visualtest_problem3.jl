@@ -6,36 +6,35 @@ using LinearAlgebra
 using Statistics
 
 # ==============================================================================
-# HELPER: Extract Controls from Simulated Paths (3D State Space)
+# HELPER: Extract Controls from Simulated Paths (Terminal Wealth - No Consumption)
 # ==============================================================================
-function extract_controls_3d(W_paths, r_paths, pi_paths, interp_c, interp_w, dt)
+function extract_controls_3d_terminal(W_paths, r_paths, pi_paths, interp_w, dt)
     sims, steps = size(W_paths)
-    c_sim = zeros(sims, steps)
     wN_sim = zeros(sims, steps)
     wS_sim = zeros(sims, steps)
 
     for n in 1:steps
-        idx = min(length(interp_c), floor(Int, (n-1)*dt/dt) + 1)
+        idx = min(length(interp_w), floor(Int, (n-1)*dt/dt) + 1)
         for i in 1:sims
             W = max(W_paths[i, n], 1e-5) # Prevent bounds errors
             r = r_paths[i, n]
             π_val = pi_paths[i, n]
 
-            c_sim[i, n] = interp_c[idx](W, r, π_val)
             wN_sim[i, n] = interp_w[idx][1](W, r, π_val)
             wS_sim[i, n] = interp_w[idx][2](W, r, π_val)
         end
     end
-    return c_sim, wN_sim, wS_sim
+    return wN_sim, wS_sim
 end
 
 # ==============================================================================
-# 1. DP Setup & Solve (Problem 3: Incomplete Market)
+# 1. DP Setup & Solve (Problem 3: Incomplete Market - Terminal Wealth)
 # ==============================================================================
-println("Solving Problem 3 DP (Incomplete Market without Inflation-Linked Bonds)...")
+println("Solving Problem 3 DP (Terminal Wealth, No Consumption)...")
 
-M, dt, β, γ = 10, 1.0, 0.96, 5.0
+M, dt, γ = 10, 1.0, 5.0
 u(x) = (x^(1 - γ)) / (1 - γ)
+inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # Inverse for Certainty Equivalent
 
 # Economic Parameters
 κ_r, overline_r, σ_r, λ_r = 0.1, 0.02, 0.01, -0.1
@@ -51,16 +50,14 @@ a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.1
     ρ_rS  ρ_πS  1.0
 ]
 
-# Grids
+# Grids (NO consumption grid!)
 G_w = 400
 W_grid = generate_log_spaced_grid(0.5, 100.0, G_w)
 Z_grids = [
     generate_linear_grid(0.0, 0.1, 10),  # r_grid (Center index 3 is 0.02)
     generate_linear_grid(0.0, 0.1, 10)   # π_grid (Center index 3 is 0.02)
 ]
-c_grid = generate_linear_grid(0.01, 0.99, 10)
 
-# ω = [ω_N, ω_S]
 # Expand the boundaries and increase the density
 omega_space = Vector{Float64}[]
 for w_N in range(-3.0, 5.0, length=41)   # Nominal bond from -300% to 500%
@@ -98,22 +95,26 @@ end
 
 transition_prob3 = make_problem3_transition(κ_r, overline_r, σ_r, λ_r, τ, κ_π, overline_π, σ_π, λ_S, σ_S, dt)
 
-# Custom Budget Constraint with strict real income (O_t / Π_t = 1.0)
-function problem3_budget_constraint(W, c, ω, R_e, R_base)
+# Custom Budget Constraint (Terminal Wealth form -> c is ignored/dropped entirely)
+function problem3_budget_constraint_terminal(W, c, ω, R_e, R_base)
     income_real = 1.0 * dt
-    return (1.0 - c) * W * (dot(ω, R_e) + R_base) + income_real
+    # Notice: (1.0 - c) is removed since consumption is zero
+    return W * (dot(ω, R_e) + R_base) + income_real
 end
 
 crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
-V, pol_c, pol_w = solve_dynamic_program(
-    W_grid, Z_grids, c_grid, omega_space,
+# Call the overloaded Terminal Wealth solver (no c_grid, no β, identity for wealth space)
+V, pol_w = solve_dynamic_program(
+    W_grid, Z_grids, omega_space,
     ε_nodes, W_weights, transition_prob3,
-    M, β, u, fractional_consumption,
-    problem3_budget_constraint, crra_ex
+    M, u, identity,
+    problem3_budget_constraint_terminal, crra_ex
 )
 
-interp_c, interp_w = create_policy_interpolators(pol_c, pol_w, W_grid, Z_grids)
+# Use a dummy consumption policy array to leverage your existing interpolator factory
+dummy_pol_c = zeros(size(pol_w))
+_, interp_w = create_policy_interpolators(dummy_pol_c, pol_w, W_grid, Z_grids)
 
 # ==============================================================================
 # 2. Forward Monte Carlo Simulation
@@ -131,10 +132,9 @@ drift_W3(t, W, r_val, pi_val) = begin
     W_safe = max(W, 1e-5)
     ω_N = interp_w[idx][1](W_safe, r_val, pi_val)
     ω_S = interp_w[idx][2](W_safe, r_val, pi_val)
-    c   = interp_c[idx](W_safe, r_val, pi_val)
 
-    # Real wealth drift with additive income
-    return W_safe * (ω_N * (-λ_r * σ_r * B_r_val) + ω_S * (λ_S * σ_S) + r_val - pi_val - c) + 1.0
+    # Real wealth drift with additive income (NO consumption subtracted)
+    return W_safe * (ω_N * (-λ_r * σ_r * B_r_val) + ω_S * (λ_S * σ_S) + r_val - pi_val) + 1.0
 end
 
 diff_W3(t, W, r_val, pi_val) = begin
@@ -158,85 +158,139 @@ conf_prob3 = MarketConfig(
 world = build_world(conf_prob3)
 
 # Extract simulated controls
-c_sim, wN_sim, wS_sim = extract_controls_3d(world.paths.W, world.paths.r, world.paths.pi, interp_c, interp_w, 1.0)
+wN_sim, wS_sim = extract_controls_3d_terminal(world.paths.W, world.paths.r, world.paths.pi, interp_w, 1.0)
 
 # ==============================================================================
-# 3. Generating Plots
+# 3. Generating Plots using `plotting.jl`
 # ==============================================================================
 println("Generating and saving plots...")
 
-# Plot 1: Value Function vs Wealth
-fig_v = Figure(size=(800, 400))
-ax_v = Axis(fig_v[1,1], title="Problem 3: Value Function V(W) (at r=0.02, π=0.02)", xlabel="Real Wealth (W)", ylabel="Expected Utility")
-lines!(ax_v, W_grid, V[:, 3, 3, 1], label="t = 1", linewidth=3, color=:dodgerblue)
-lines!(ax_v, W_grid, V[:, 3, 3, 5], label="t = 5", linewidth=3, color=:darkorange)
-lines!(ax_v, W_grid, V[:, 3, 3, 10], label="t = 10", linewidth=3, color=:firebrick)
-axislegend(ax_v, position=:rb)
-save("prob3_value_function.png", fig_v)
+# ---------------------------------------------------------
+# Plot 1: Agnostic Curves: Expected Utility vs Wealth
+# ---------------------------------------------------------
+y_data_V = [
+    V[:, 3, 3, 1],  # t=1
+    V[:, 3, 3, 5],  # t=5
+    V[:, 3, 3, 10]  # t=10
+]
+labels_time = ["t = 1", "t = 5", "t = 10"]
 
-# Plot 2: Heatmap for Nominal Bond Weight (Fixing π = 0.02, t = 1)
-fig_heat_N = Figure(size=(800, 600))
-ax_N = Axis(fig_heat_N[1, 1], title="Nominal Bond Policy Heatmap (t=1, π=0.02)", xlabel="Real Wealth (W)", ylabel="Interest Rate (r)")
-slice_N = [pol_w[w, r, 3, 1][1] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
-co_N = contourf!(ax_N, W_grid, Z_grids[1], slice_N, colormap=:viridis, levels=20)
-Colorbar(fig_heat_N[1, 2], co_N, label="Nominal Bond Weight")
-save("prob3_heatmap_nominal_bond.png", fig_heat_N)
+fig_v = plot_curves(W_grid, y_data_V, labels_time;
+                    title="Problem 3: Expected Utility V(W) (Terminal)",
+                    xlabel="Real Wealth (W)", ylabel="Expected Utility", legend_pos=:rb)
+save("prob3_term_value_function.png", fig_v)
 
-# Plot 2: Heatmap for Nominal Bond Weight (Fixing π = 0.02, t = 1) #FIXXXXXX
-fig_heat_N = Figure(size=(800, 600))
-ax_N = Axis(fig_heat_N[1, 1], title="Nominal Bond Policy Heatmap (t=1, π=0.02)", xlabel="Inflation rate (π)", ylabel="Interest Rate (r)")
-slice_N = [pol_w[w, r, 3, 1][1] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
-co_N = contourf!(ax_N, W_grid, Z_grids[1], slice_N, colormap=:viridis, levels=20)
-Colorbar(fig_heat_N[1, 2], co_N, label="Nominal Bond Weight")
-save("prob3_heatmap_nominal_bond.png", fig_heat_N)
 
-# Plot 3: Heatmap for Stock Weight (Fixing π = 0.02, t = 1)
-fig_heat_S = Figure(size=(800, 600))
-ax_S = Axis(fig_heat_S[1, 1], title="Stock Policy Heatmap (t=1, π=0.02)", xlabel="Real Wealth (W)", ylabel="Interest Rate (r)")
-slice_S = [pol_w[w, r, 3, 1][2] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
-co_S = contourf!(ax_S, W_grid, Z_grids[1], slice_S, colormap=:plasma, levels=20)
-Colorbar(fig_heat_S[1, 2], co_S, label="Stock Weight")
-save("prob3_heatmap_stock.png", fig_heat_S)
+# ---------------------------------------------------------
+# Plot 2: Agnostic Curves: Certainty Equivalent vs Wealth
+# ---------------------------------------------------------
+y_data_CE = [
+    calculate_certainty_equivalent.(V[:, 3, 3, 1], inv_u),
+    calculate_certainty_equivalent.(V[:, 3, 3, 5], inv_u),
+    calculate_certainty_equivalent.(V[:, 3, 3, 10], inv_u)
+]
 
-# Plot 4: Simulated Paths Overlay (Real Wealth)
-fig_paths_W = plot_paths_overlay(Matrix(world.paths.W); title="Problem 3: Simulated Real Wealth Paths", xlabel="Time (Years)", ylabel="Real Wealth", line_color=:dodgerblue)
-save("prob3_sim_wealth_paths.png", fig_paths_W)
+fig_ce_wealth = plot_curves(W_grid, y_data_CE, labels_time;
+                            title="Problem 3: Certainty Equivalent Terminal Wealth",
+                            xlabel="Current Real Wealth (W)", ylabel="Guaranteed Terminal Wealth", legend_pos=:rb)
+save("prob3_term_ce_vs_wealth.png", fig_ce_wealth)
 
-# Plot 5: Simulated Paths Overlay (Interest Rate & Inflation)
-fig_paths_r = plot_paths_overlay(Matrix(world.paths.r); title="Problem 3: Simulated Interest Rate Paths", line_color=:firebrick)
-save("prob3_sim_rate_paths.png", fig_paths_r)
-fig_paths_pi = plot_paths_overlay(Matrix(world.paths.pi); title="Problem 3: Simulated Inflation Paths", line_color=:darkorange)
-save("prob3_sim_inflation_paths.png", fig_paths_pi)
 
-# Plot 6: Average Strategy Evolutions
-fig_mean_c = plot_mean_with_bounds(c_sim; title="Mean Consumption Strategy", ylabel="Consumption Fraction", color=:purple)
-save("prob3_mean_consumption.png", fig_mean_c)
+# ---------------------------------------------------------
+# Plot 3: Agnostic Curves: Certainty Equivalent Progression Over Time
+# ---------------------------------------------------------
+fixed_w_idx = 200 # Middle of grid
+time_axis = 1:M
+ce_over_time = [calculate_certainty_equivalent(V[fixed_w_idx, 3, 3, t], inv_u) for t in time_axis]
 
+fig_ce_time = plot_curves(time_axis, [ce_over_time], ["CE Terminal Wealth"];
+                          title="Certainty Equivalent Progression Over Time (Fixed State)",
+                          xlabel="Time Step (t)", ylabel="Guaranteed Terminal Wealth", legend_pos=:rt)
+save("prob3_term_ce_progression.png", fig_ce_time)
+
+
+# ---------------------------------------------------------
+# Plot 4: Agnostic Heatmap: Wealth vs Interest Rate (Nominal Bond)
+# ---------------------------------------------------------
+slice_W_vs_r = [pol_w[w, r, 3, 1][1] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
+
+fig_heat_N1 = plot_heatmap(W_grid, Z_grids[1], slice_W_vs_r;
+                           title="Nominal Bond Policy (t=1, π=0.02)",
+                           xlabel="Real Wealth (W)", ylabel="Interest Rate (r)",
+                           colormap=:viridis, label="Nominal Bond Weight")
+save("prob3_term_heatmap_wealth_vs_rate.png", fig_heat_N1)
+
+
+# ---------------------------------------------------------
+# Plot 5: Agnostic Heatmap: Interest Rate vs Inflation (Nominal Bond)
+# ---------------------------------------------------------
+slice_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][1] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
+
+fig_heat_N2 = plot_heatmap(Z_grids[1], Z_grids[2], slice_r_vs_pi;
+                           title="Nominal Bond Policy (t=1, Middle Wealth)",
+                           xlabel="Interest Rate (r)", ylabel="Inflation (π)",
+                           colormap=:plasma, label="Nominal Bond Weight")
+save("prob3_term_heatmap_rate_vs_inflation.png", fig_heat_N2)
+
+
+# ---------------------------------------------------------
+# Plot 6: Agnostic Heatmap: Wealth vs Interest Rate (Stock)
+# ---------------------------------------------------------
+slice_S_W_vs_r = [pol_w[w, r, 3, 1][2] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
+
+fig_heat_S = plot_heatmap(W_grid, Z_grids[1], slice_S_W_vs_r;
+                          title="Stock Policy (t=1, π=0.02)",
+                          xlabel="Real Wealth (W)", ylabel="Interest Rate (r)",
+                          colormap=:plasma, label="Stock Weight")
+save("prob3_term_heatmap_stock.png", fig_heat_S)
+
+
+# ---------------------------------------------------------
+# Plot 7-9: Path Overlays
+# ---------------------------------------------------------
+fig_paths_W = plot_paths_overlay(Matrix(world.paths.W); title="Simulated Real Wealth Paths", xlabel="Time (Years)", ylabel="Real Wealth", line_color=:dodgerblue)
+save("prob3_term_sim_wealth_paths.png", fig_paths_W)
+
+fig_paths_r = plot_paths_overlay(Matrix(world.paths.r); title="Simulated Interest Rate Paths", line_color=:firebrick)
+save("prob3_term_sim_rate_paths.png", fig_paths_r)
+
+fig_paths_pi = plot_paths_overlay(Matrix(world.paths.pi); title="Simulated Inflation Paths", line_color=:darkorange)
+save("prob3_term_sim_inflation_paths.png", fig_paths_pi)
+
+
+# ---------------------------------------------------------
+# Plot 10-11: Mean Strategy Allocations
+# ---------------------------------------------------------
 fig_mean_wN = plot_mean_with_bounds(wN_sim; title="Mean Nominal Bond Allocation", ylabel="Portfolio Weight", color=:blue)
-save("prob3_mean_nominal_bond.png", fig_mean_wN)
+save("prob3_term_mean_nominal_bond.png", fig_mean_wN)
 
 fig_mean_wS = plot_mean_with_bounds(wS_sim; title="Mean Stock Allocation", ylabel="Portfolio Weight", color=:green)
-save("prob3_mean_stock.png", fig_mean_wS)
+save("prob3_term_mean_stock.png", fig_mean_wS)
 
 
-# Plot 7: Objective Curve (Ensures we aren't clipping the boundaries anymore!)
-fig_obj = plot_objective_curve(wN_range, obj_curve_vals,
-                               title="Bellman Objective vs Nominal Bond Weight (t=1, W=50)",
-                               xlabel="Nominal Bond Weight (ω_N)")
-save("prob3_objective_curve.png", fig_obj)
-
-# Plot 8: Deterministic Target-Date Glidepath
+# ---------------------------------------------------------
+# Plot 12: Deterministic Target-Date Glidepath
+# ---------------------------------------------------------
 times_seq = 1:M
 glide_wN = [interp_w[t][1](50.0, 0.02, 0.02) for t in times_seq]
 glide_wS = [interp_w[t][2](50.0, 0.02, 0.02) for t in times_seq]
-fig_glide = plot_deterministic_glidepath(times_seq, glide_wN, glide_wS)
-save("prob3_deterministic_glidepath.png", fig_glide)
 
-# Plot 9: Wealth vs Human Capital Evolution
+fig_glide = plot_curves(times_seq, [glide_wN, glide_wS], ["Nominal Bond", "Stock"];
+                        title="Deterministic Target-Date Glidepath",
+                        xlabel="Time (Steps)", ylabel="Portfolio Weight", legend_pos=:rt)
+save("prob3_term_deterministic_glidepath.png", fig_glide)
+
+
+# ---------------------------------------------------------
+# Plot 13: Wealth vs Human Capital Evolution
+# ---------------------------------------------------------
 # Expected PV of future real income discounted at real rate (approx 0.0 since r_bar = pi_bar = 0.02)
 H_mean = [(M - t + 1) * dt for t in times_seq]
 W_mean = vec(mean(world.paths.W, dims=1))[1:M]
-fig_wealth_comp = plot_wealth_composition(times_seq, W_mean, H_mean)
-save("prob3_wealth_composition.png", fig_wealth_comp)
 
-println("All Problem 3 DP solutions, simulations, and plots generated successfully!")
+fig_wealth_comp = plot_curves(times_seq, [W_mean, H_mean], ["Mean Financial Wealth (W)", "Human Capital (H)"];
+                              title="Wealth Composition Over Time",
+                              xlabel="Time (Steps)", ylabel="Value", legend_pos=:rc)
+save("prob3_term_wealth_composition.png", fig_wealth_comp)
+
+println("All Terminal Wealth Problem 3 solutions, simulations, and plots generated successfully!")
