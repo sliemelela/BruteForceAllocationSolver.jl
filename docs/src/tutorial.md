@@ -217,3 +217,52 @@ V_cons, pol_c, pol_w_cons = solve_dynamic_program(
 optimal_c = pol_c[100, 6, 1]
 println("Optimal Consumption Fraction: ", round(optimal_c, digits=4))
 ```
+
+## Example 5: Calculating the Certainty Equivalent
+The Value Function arrays (`V`, `V_log`, `V_cons`) returned by the solver contain abstract
+"utils," which can be mathematically difficult to interpret.
+
+To translate these abstract numbers back into understandable "dollar amounts,"
+the package provides tools to calculate the Certainty Equivalent (CE).
+This is the guaranteed, risk-free amount of wealth (or constant consumption stream)
+that provides the exact same utility as taking the optimal risky path.
+
+To compute it, you simply need to define the mathematical inverse of your chosen
+utility function and pass it into the CE functions.
+
+```julia
+# 1. Define the mathematical inverse of the CRRA utility function
+# u(x) = (x^(1-γ)) / (1-γ)
+inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+
+# --- Terminal Wealth Problems ---
+# For problems without intermediate consumption (like Example 1),
+# use `calculate_certainty_equivalent` to find the guaranteed terminal wealth.
+target_timestep = 1
+wealth_index = 100 # Checking the middle of our W_grid
+
+abstract_utility = V[wealth_index, target_timestep]
+guaranteed_wealth = calculate_certainty_equivalent(abstract_utility, inv_u)
+
+println("Expected Utility at t=1: ", round(abstract_utility, digits=4))
+println("Certainty Equivalent Terminal Wealth: ", round(guaranteed_wealth, digits=2))
+
+
+# --- Intermediate Consumption Problems ---
+# For problems with consumption streams (like Example 4), we use
+# `calculate_equivalent_consumption_stream` to account for the discount factor over time.
+# This returns the constant amount you would need to consume *every single period* # to achieve the same total lifetime utility.
+
+periods_remaining = M - target_timestep + 1
+abstract_lifetime_utility = V_cons[wealth_index, 6, target_timestep] # 6 is the middle rate index
+
+constant_consumption = calculate_equivalent_consumption_stream(
+    abstract_lifetime_utility,
+    inv_u,
+    β,
+    periods_remaining
+)
+
+println("Expected Lifetime Utility at t=1: ", round(abstract_lifetime_utility, digits=4))
+println("Equivalent Constant Consumption Stream: ", round(constant_consumption, digits=2))
+```
