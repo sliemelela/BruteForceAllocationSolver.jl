@@ -32,14 +32,14 @@ end
 # ==============================================================================
 println("Solving Problem 3 DP (Terminal Wealth, No Consumption)...")
 
-M, dt, γ = 10, 1.0, 5.0
+M, dt, γ = 10, 1.0, 2.0
 u(x) = (x^(1 - γ)) / (1 - γ)
 inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # Inverse for Certainty Equivalent
 
 # Economic Parameters
 κ_r, overline_r, σ_r, λ_r = 0.1, 0.02, 0.01, -0.1
 κ_π, overline_π, σ_π = 0.05, 0.02, 0.02
-a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.1
+a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.25
 τ = 10.0 # Rolling bond maturity
 
 # Correlations
@@ -51,17 +51,18 @@ a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.1
 ]
 
 # Grids (NO consumption grid!)
-G_w = 400
-W_grid = generate_log_spaced_grid(0.5, 100.0, G_w)
+G_w = 150
+W_grid = generate_log_spaced_grid(10.0, 300.0, G_w)
 Z_grids = [
-    generate_linear_grid(0.0, 0.1, 10),  # r_grid (Center index 3 is 0.02)
-    generate_linear_grid(0.0, 0.1, 10)   # π_grid (Center index 3 is 0.02)
+    generate_linear_grid(-0.02, 0.06, 5),  # r_grid  (covers ±4σ)
+    generate_linear_grid(-0.06, 0.10, 5)   # π_grid  (covers ±4σ)
 ]
+
 
 # Expand the boundaries and increase the density
 omega_space = Vector{Float64}[]
-for w_N in range(-3.0, 5.0, length=41)   # Nominal bond from -300% to 500%
-    for w_S in range(-1.0, 2.5, length=41) # Stock from 0% to 150%
+for w_N in range(-3.0, 5.0, length=31)   # Nominal bond from -300% to 500%
+    for w_S in range(-1.0, 2.5, length=31) # Stock from 0% to 150%
         push!(omega_space, [w_N, w_S])
     end
 end
@@ -164,6 +165,37 @@ wN_sim, wS_sim = extract_controls_3d_terminal(world.paths.W, world.paths.r, worl
 # 3. Generating Plots using `plotting.jl`
 # ==============================================================================
 println("Generating and saving plots...")
+
+# ==============================================================================
+# 4. CE Comparison (Numerical vs. Analytical Baseline)
+# ==============================================================================
+println("\nCalculating Problem 3 (Incomplete Market) Performance...")
+
+# Define initial state to match Problem 1 comparison
+W_0 = 150.0   # Set to 150.0 to match your previous baseline, or 50.0 to match glidepath
+r_0_idx = 3   # Index 3 corresponds to r = 0.02
+pi_0_idx = 3  # Index 3 corresponds to π = 0.02
+
+# We need to interpolate the Value Function at t=1 across the Wealth Grid
+using Interpolations
+
+# Create a linear interpolator for the Value Function at the initial state
+V_initial_slice = V[:, r_0_idx, pi_0_idx, 1]
+V_itp = LinearInterpolation(W_grid, V_initial_slice, extrapolation_bc=Line())
+
+# Calculate Numerical Baseline
+EU_num = V_itp(W_0)
+CE_num = inv_u(EU_num)
+
+println("==================================================")
+println("Problem 3 (Incomplete Market) Results at t=0:")
+println("  Initial Total Wealth (W_0): $W_0")
+println("  Expected Utility:           $(round(EU_num, digits=6))")
+println("  Numerical CE:               $(round(CE_num, digits=4))")
+println("==================================================")
+println("This Numerical CE represents your grid's baseline performance.")
+println("To find the exact numerical friction penalty, subtract this from your Analytical CE.")
+
 
 # ---------------------------------------------------------
 # Plot 1: Agnostic Curves: Expected Utility vs Wealth
