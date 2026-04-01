@@ -7,11 +7,11 @@ using Statistics
 using Interpolations
 
 println("==================================================")
-println("Setting up Problem 1 (Complete Market) Solver...")
+println("Setting up Problem 1 (Complete Market) Master Script")
 println("==================================================")
 
 # ==============================================================================
-# 1. Parameters & Market Prices of Risk
+# 1. Global Parameters & Market Prices of Risk
 # ==============================================================================
 M, dt, γ = 10, 1.0, 2.0
 T = M * dt
@@ -44,7 +44,7 @@ println("Factor loadings (φ):       ", phi_vec)
 
 
 # ==============================================================================
-# 2. Exact Analytical Baseline (using Lemma A.7)
+# 2. Exact Analytical Baseline & Helper Functions
 # ==============================================================================
 println("\nCalculating Analytical Baseline...")
 
@@ -114,7 +114,146 @@ println("  Analytical CE:               ", round(analytical_CE, digits=4))
 
 
 # ==============================================================================
-# 3. Numerical DP Setup (Complete Market - 3 Assets, Total Wealth)
+# 3. Generating Analytical Closed-Form Plots
+# ==============================================================================
+println("\nGenerating Analytical Closed-Form Plots...")
+
+# Equation (53): Analytical Value Function
+function eq53_value_function(t, W, r, pi_val)
+    h = T - t
+    exponent = (γ - 1.0) * (E2(h) + γ_tilde * V2(h) - B_r(h)*r + B_π(h)*pi_val)
+    return (W^(1 - γ)) / (1 - γ) * exp(exponent)
+end
+
+# Equation (55): Analytical Certainty Equivalent
+function eq55_certainty_equivalent(t, W, r, pi_val)
+    h = T - t
+    exponent = B_r(h)*r - B_π(h)*pi_val - E2(h) - γ_tilde * V2(h)
+    return W * exp(exponent)
+end
+
+# Equation (143) helper: Real Zero-Coupon Bond Price (DI_t(s))
+function DI_price(t, s, r, pi_val)
+    h = s - t
+    return exp(A_I(h) - B_r(h)*r + B_π(h)*pi_val)
+end
+
+# Equation (143): Duration of Human Capital
+function eq143_durations(t, r, pi_val)
+    H_t = 0.0
+    D_r_num = 0.0
+    D_pi_num = 0.0
+
+    for step in Int(t+1):M
+        s = step * dt
+        h = s - t
+        P_real = DI_price(t, s, r, pi_val)
+        income = 1.0 * dt
+
+        H_t += income * P_real
+        D_r_num += income * P_real * B_r(h)
+        D_pi_num += income * P_real * B_π(h)
+    end
+
+    if H_t < 1e-8 return 0.0, 0.0, 0.0 end
+    return D_r_num / H_t, D_pi_num / H_t, H_t
+end
+
+# Equation (36): Optimal Portfolio WITHOUT Human Capital
+function eq36_optimal_weights_no_hc(t)
+    h = T - t
+    if h < 1e-8 return 0.0, 0.0, 0.0 end
+
+    wN = (B_r(h) * σ_r * phi_vec[2] + B_π(h) * σ_π * phi_vec[1]) / (B_r(h) * B_π(h) * σ_r * σ_π)
+    wI = (1.0 - 1.0/γ) - (phi_vec[2] / (B_π(h) * σ_π))
+    wS = -phi_vec[3] / σ_S
+    return wN, wI, wS
+end
+
+# Equation (37): Optimal Portfolio WITH Human Capital
+function eq37_optimal_weights_with_hc(t, F, r, pi_val)
+    h = T - t
+    if h < 1e-8 return 0.0, 0.0, 0.0 end
+
+    wN_tilde, wI_tilde, wS_tilde = eq36_optimal_weights_no_hc(t)
+    D_r, D_pi, H_t = eq143_durations(t, r, pi_val)
+    W_t = F + H_t
+
+    wN_star = (W_t / F) * wN_tilde + (H_t / F) * (D_pi / B_π(h) - D_r / B_r(h))
+    wI_star = (W_t / F) * wI_tilde - (H_t / F) * (D_pi / B_π(h))
+    wS_star = (W_t / F) * wS_tilde
+
+    return wN_star, wI_star, wS_star
+end
+
+# Generate Plot Data Arrays
+t_seq = 0:1:9
+ana_r_grid = range(-0.02, 0.06, length=50)
+ana_pi_grid = range(-0.06, 0.10, length=50)
+fixed_W_ana = 150.0
+
+val_time = [eq53_value_function(t, fixed_W_ana, r_0, π_0) for t in t_seq]
+ce_time = [eq55_certainty_equivalent(t, fixed_W_ana, r_0, π_0) for t in t_seq]
+
+durations = [eq143_durations(t, r_0, π_0) for t in t_seq]
+Dr_time, Dpi_time = [d[1] for d in durations], [d[2] for d in durations]
+
+w_no_hc = [eq36_optimal_weights_no_hc(t) for t in t_seq]
+wN_no_hc_time, wI_no_hc_time, wS_no_hc_time = [w[1] for w in w_no_hc], [w[2] for w in w_no_hc], [w[3] for w in w_no_hc]
+
+w_hc = [eq37_optimal_weights_with_hc(t, F_0, r_0, π_0) for t in t_seq]
+wN_hc_time, wI_hc_time, wS_hc_time = [w[1] for w in w_hc], [w[2] for w in w_hc], [w[3] for w in w_hc]
+
+t_fix = 0.0
+val_heat = [eq53_value_function(t_fix, fixed_W_ana, r, pi) for r in ana_r_grid, pi in ana_pi_grid]
+ce_heat = [eq55_certainty_equivalent(t_fix, fixed_W_ana, r, pi) for r in ana_r_grid, pi in ana_pi_grid]
+Dr_heat = [eq143_durations(t_fix, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
+Dpi_heat = [eq143_durations(t_fix, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
+wN_no_hc_heat = [eq36_optimal_weights_no_hc(t_fix)[1] for r in ana_r_grid, pi in ana_pi_grid]
+wN_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
+wI_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
+wS_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[3] for r in ana_r_grid, pi in ana_pi_grid]
+
+# Save Analytical Plots
+save("analytical_eq53_value_over_time.png", plot_curves(t_seq, [val_time], ["V(W)"]; title="Eq 53: Value Function (W=150, r=0.02, π=0.02)", xlabel="Time", ylabel="Utility", legend_pos=:rt))
+save("analytical_eq55_ce_over_time.png", plot_curves(t_seq, [ce_time], ["CE"]; title="Eq 55: Certainty Equivalent (W=150, r=0.02, π=0.02)", xlabel="Time", ylabel="CE", legend_pos=:rt))
+save("analytical_eq143_durations_over_time.png", plot_curves(t_seq, [Dr_time, Dpi_time], ["D^r", "D^π"]; title="Eq 143: HC Sensitivities (r=0.02, π=0.02)", xlabel="Time", ylabel="Duration", legend_pos=:rt))
+save("analytical_eq36_weights_over_time.png", plot_curves(t_seq, [wN_no_hc_time, wI_no_hc_time, wS_no_hc_time], ["w_N", "w_I", "w_S"]; title="Eq 36: Weights without HC", xlabel="Time", ylabel="Weight", legend_pos=:lt))
+save("analytical_eq37_weights_over_time.png", plot_curves(t_seq, [wN_hc_time, wI_hc_time, wS_hc_time], ["w_N^*", "w_I^*", "w_S^*"]; title="Eq 37: Weights with HC (F=140, r=0.02, π=0.02)", xlabel="Time", ylabel="Weight", legend_pos=:lt))
+
+save("analytical_eq53_value_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, val_heat; title="Eq 53: Value Function (t=0, W=150)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:viridis, label="Utility"))
+save("analytical_eq55_ce_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, ce_heat; title="Eq 55: Certainty Equivalent (t=0, W=150)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:viridis, label="CE"))
+save("analytical_eq143_Dr_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, Dr_heat; title="Eq 143: D^r Sensitivity (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="D^r"))
+save("analytical_eq143_Dpi_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, Dpi_heat; title="Eq 143: D^π Sensitivity (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="D^π"))
+save("analytical_eq36_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_no_hc_heat; title="Eq 36: Nominal Bond WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat; title="Eq 37: Nominal Bond WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat; title="Eq 37: ILB WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat; title="Eq 37: Stock WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+
+# --- Heatmap Data (at t=5) ---
+t_fix_5 = 5.0
+wN_hc_heat_5 = [eq37_optimal_weights_with_hc(t_fix_5, F_0, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
+wI_hc_heat_5 = [eq37_optimal_weights_with_hc(t_fix_5, F_0, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
+wS_hc_heat_5 = [eq37_optimal_weights_with_hc(t_fix_5, F_0, r, pi)[3] for r in ana_r_grid, pi in ana_pi_grid]
+
+# --- Heatmap Data (at t=9) ---
+t_fix_9 = 9.0
+wN_hc_heat_9 = [eq37_optimal_weights_with_hc(t_fix_9, F_0, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
+wI_hc_heat_9 = [eq37_optimal_weights_with_hc(t_fix_9, F_0, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
+wS_hc_heat_9 = [eq37_optimal_weights_with_hc(t_fix_9, F_0, r, pi)[3] for r in ana_r_grid, pi in ana_pi_grid]
+
+# Save Analytical Heatmaps for t=5
+save("analytical_eq37_wN_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_5; title="Eq 37: Nominal Bond WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_5; title="Eq 37: ILB WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_5; title="Eq 37: Stock WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+
+# Save Analytical Heatmaps for t=9
+save("analytical_eq37_wN_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_9; title="Eq 37: Nominal Bond WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_9; title="Eq 37: ILB WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_9; title="Eq 37: Stock WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+
+# ==============================================================================
+# 4. Numerical DP Setup (Complete Market - 3 Assets, Total Wealth)
 # ==============================================================================
 println("\nSetting up Numerical Grids...")
 
@@ -126,16 +265,15 @@ Z_grids = [
     generate_linear_grid(-0.06, 0.10, 5)   # π_grid
 ]
 
-# Portfolio weights: ω = [ω_N, ω_I, ω_S]
+# Tighter, higher-resolution portfolio bounds
 omega_space = Vector{Float64}[]
-for w_N in range(-1.0, 2.0, length=11)
-    for w_I in range(-1.0, 2.0, length=11)
-        for w_S in range(0.0, 1.5, length=11)
+for w_N in range(-1.0, 6.0, length=21)
+    for w_I in range(-0.5, 1.0, length=21)
+        for w_S in range(-0.5, 3.0, length=21)
             push!(omega_space, [w_N, w_I, w_S])
         end
     end
 end
-
 ε_nodes, W_weights = generate_gaussian_shocks(3, 3, ρ_mat)
 
 function make_problem1_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
@@ -185,8 +323,9 @@ function problem1_budget_constraint(W, c, ω, R_e, R_base)
 end
 crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
+
 # ==============================================================================
-# 4. DP Execution & Numerical Baseline
+# 5. DP Execution & Numerical Baseline Evaluation
 # ==============================================================================
 println("Solving Dynamic Program (Pure Terminal Wealth)...")
 V, pol_w = solve_dynamic_program(
@@ -210,7 +349,7 @@ println("==================================================")
 
 
 # ==============================================================================
-# 5. Forward Monte Carlo Simulation
+# 6. Forward Monte Carlo Simulation
 # ==============================================================================
 println("\nRunning Forward Monte Carlo Simulation...")
 
@@ -276,88 +415,152 @@ wN_sim, wI_sim, wS_sim = extract_controls_prob1(world_1.paths.W, world_1.paths.r
 
 
 # ==============================================================================
-# 6. Generating Plots (Problem 1)
+# 7. Post-Processing: Extracting Numerical w* (Equation 37 Transformation)
 # ==============================================================================
-println("Generating and saving plots...")
+println("Calculating transformed w* weights...")
 
-# Identify the fixed indices and explicitly extract their values for the titles
-fixed_w_idx = div(G_w, 2)
+function get_HC_and_durations(t, r_val, pi_val)
+    H_t = 0.0
+    D_r_num = 0.0
+    D_pi_num = 0.0
+
+    for step in Int(t+1):M
+        s = step * dt
+        h = s - t
+        P_real = exp(A_I(h) - B_r(h)*r_val + B_π(h)*pi_val)
+        income = 1.0 * dt
+
+        H_t += income * P_real
+        D_r_num += income * P_real * B_r(h)
+        D_pi_num += income * P_real * B_π(h)
+    end
+
+    if H_t < 1e-8 return 0.0, 0.0, 0.0 end
+    return D_r_num / H_t, D_pi_num / H_t, H_t
+end
+
+function get_numerical_w_star(t_step, F_val, r_val, pi_val)
+    t = (t_step - 1) * dt
+    h = T - t
+    if h < 1e-8 return 0.0, 0.0, 0.0 end
+
+    D_r, D_pi, H_t = get_HC_and_durations(t, r_val, pi_val)
+    W_t = F_val + H_t
+
+    wN_tilde = interp_w[t_step][1](W_t, r_val, pi_val)
+    wI_tilde = interp_w[t_step][2](W_t, r_val, pi_val)
+    wS_tilde = interp_w[t_step][3](W_t, r_val, pi_val)
+
+    wN_star = (W_t / F_val) * wN_tilde + (H_t / F_val) * (D_pi / B_π(h) - D_r / B_r(h))
+    wI_star = (W_t / F_val) * wI_tilde - (H_t / F_val) * (D_pi / B_π(h))
+    wS_star = (W_t / F_val) * wS_tilde
+
+    return wN_star, wI_star, wS_star
+end
+
+
+# ==============================================================================
+# 8. Generating Numerical DP Plots
+# ==============================================================================
+println("Generating and saving numerical plots...")
+
+# Find the exact index closest to W = 150.0
+fixed_w_idx = argmin(abs.(W_grid .- 150.0))
 fixed_W_val = round(W_grid[fixed_w_idx], digits=2)
-fixed_r_idx = 3  # Corresponds to r = 0.02
-fixed_pi_idx = 3 # Corresponds to π = 0.02
+fixed_r_idx = 3
+fixed_pi_idx = 3
 
 labels_time = ["t = 1", "t = 5", "t = 10"]
 
-# ---------------------------------------------------------
-# Plot 1: Value Function
-# ---------------------------------------------------------
+# Plot 1 & 2: Value & CE
 fig_v = plot_curves(W_grid, [V[:, fixed_r_idx, fixed_pi_idx, 1], V[:, fixed_r_idx, fixed_pi_idx, 5], V[:, fixed_r_idx, fixed_pi_idx, 10]], labels_time;
                     title="Prob 1: Expected Utility V(W) (r=0.02, π=0.02)", xlabel="Total Real Wealth (W)", ylabel="Utility", legend_pos=:rb)
-save("prob1_term_value_function.png", fig_v)
+save("prob1_num_value_function.png", fig_v)
 
-# ---------------------------------------------------------
-# Plot 2: CE Progression
-# ---------------------------------------------------------
 time_axis = 1:M
 ce_over_time = [calculate_certainty_equivalent(V[fixed_w_idx, fixed_r_idx, fixed_pi_idx, t], inv_u) for t in time_axis]
 fig_ce_time = plot_curves(time_axis, [ce_over_time], ["CE Total Wealth"];
                           title="Prob 1: CE Progression (W=$fixed_W_val, r=0.02, π=0.02)", xlabel="Time Step (t)", ylabel="Guaranteed Terminal Wealth", legend_pos=:rt)
-save("prob1_term_ce_progression.png", fig_ce_time)
+save("prob1_num_ce_progression.png", fig_ce_time)
 
-# ---------------------------------------------------------
-# Plot 3-5: Mean Strategy Allocations
-# ---------------------------------------------------------
+# Plot 3-5: MC Mean Strategy
 fig_mean_wN = plot_mean_with_bounds(wN_sim; title="Mean Nominal Bond Allocation", ylabel="Weight", color=:blue)
-save("prob1_term_mean_nominal_bond.png", fig_mean_wN)
-
+save("prob1_num_mean_nominal_bond.png", fig_mean_wN)
 fig_mean_wI = plot_mean_with_bounds(wI_sim; title="Mean ILB Allocation", ylabel="Weight", color=:purple)
-save("prob1_term_mean_ilb.png", fig_mean_wI)
-
+save("prob1_num_mean_ilb.png", fig_mean_wI)
 fig_mean_wS = plot_mean_with_bounds(wS_sim; title="Mean Stock Allocation", ylabel="Weight", color=:green)
-save("prob1_term_mean_stock.png", fig_mean_wS)
+save("prob1_num_mean_stock.png", fig_mean_wS)
 
-# ---------------------------------------------------------
-# Plot 6-8: Heatmaps (Interest Rate vs Inflation) at Fixed Wealth
-# ---------------------------------------------------------
+# Plot 6-8: Untransformed Heatmaps (Total Wealth w-tilde)
 slice_N_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][1] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
 slice_I_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][2] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
 slice_S_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][3] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
 
 fig_heat_N_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_r_vs_pi;
-                               title="Prob 1: Nominal Bond Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)",
-                               colormap=:plasma, label="Weight")
-save("prob1_term_heatmap_N_rate_vs_inflation.png", fig_heat_N_r_pi)
+                               title="Prob 1: Nominal Bond Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_N_tilde.png", fig_heat_N_r_pi)
 
 fig_heat_I_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_r_vs_pi;
-                               title="Prob 1: ILB Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)",
-                               colormap=:plasma, label="Weight")
-save("prob1_term_heatmap_I_rate_vs_inflation.png", fig_heat_I_r_pi)
+                               title="Prob 1: ILB Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_I_tilde.png", fig_heat_I_r_pi)
 
 fig_heat_S_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_r_vs_pi;
-                               title="Prob 1: Stock Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)",
-                               colormap=:plasma, label="Weight")
-save("prob1_term_heatmap_S_rate_vs_inflation.png", fig_heat_S_r_pi)
+                               title="Prob 1: Stock Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_S_tilde.png", fig_heat_S_r_pi)
 
-# ---------------------------------------------------------
-# Plot 9-11: Heatmaps (Wealth vs Interest Rate) at Fixed Inflation
-# ---------------------------------------------------------
-slice_N_W_vs_r = [pol_w[w, r, fixed_pi_idx, 1][1] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
-slice_I_W_vs_r = [pol_w[w, r, fixed_pi_idx, 1][2] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
-slice_S_W_vs_r = [pol_w[w, r, fixed_pi_idx, 1][3] for w in 1:length(W_grid), r in 1:length(Z_grids[1])]
+# Plot 9-11: Transformed Heatmaps (Financial Wealth w-star)
+t_idx = 1
+slice_N_star = [get_numerical_w_star(t_idx, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
+slice_I_star = [get_numerical_w_star(t_idx, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
+slice_S_star = [get_numerical_w_star(t_idx, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
 
-fig_heat_N_W_r = plot_heatmap(W_grid, Z_grids[1], slice_N_W_vs_r;
-                               title="Prob 1: Nominal Bond Policy (π=0.02, t=1)", xlabel="Total Real Wealth (W)", ylabel="Interest Rate (r)",
-                               colormap=:viridis, label="Weight")
-save("prob1_term_heatmap_N_wealth_vs_rate.png", fig_heat_N_W_r)
+fig_heat_N_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star;
+                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_N_star.png", fig_heat_N_star)
 
-fig_heat_I_W_r = plot_heatmap(W_grid, Z_grids[1], slice_I_W_vs_r;
-                               title="Prob 1: ILB Policy (π=0.02, t=1)", xlabel="Total Real Wealth (W)", ylabel="Interest Rate (r)",
-                               colormap=:viridis, label="Weight")
-save("prob1_term_heatmap_I_wealth_vs_rate.png", fig_heat_I_W_r)
+fig_heat_I_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star;
+                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_I_star.png", fig_heat_I_star)
 
-fig_heat_S_W_r = plot_heatmap(W_grid, Z_grids[1], slice_S_W_vs_r;
-                               title="Prob 1: Stock Policy (π=0.02, t=1)", xlabel="Total Real Wealth (W)", ylabel="Interest Rate (r)",
-                               colormap=:viridis, label="Weight")
-save("prob1_term_heatmap_S_wealth_vs_rate.png", fig_heat_S_W_r)
+fig_heat_S_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star;
+                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_S_star.png", fig_heat_S_star)
+
+# Plot 12-14: Transformed Heatmaps at t=5 (Index 6)
+t_idx_5 = 6
+slice_N_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
+slice_I_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
+slice_S_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
+
+fig_heat_N_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star_5;
+                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_N_star_t5.png", fig_heat_N_star_5)
+
+fig_heat_I_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star_5;
+                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_I_star_t5.png", fig_heat_I_star_5)
+
+fig_heat_S_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star_5;
+                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_S_star_t5.png", fig_heat_S_star_5)
+
+
+# Plot 15-17: Transformed Heatmaps at t=9 (Index 10)
+t_idx_9 = 10
+slice_N_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
+slice_I_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
+slice_S_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
+
+fig_heat_N_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star_9;
+                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_N_star_t9.png", fig_heat_N_star_9)
+
+fig_heat_I_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star_9;
+                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_I_star_t9.png", fig_heat_I_star_9)
+
+fig_heat_S_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star_9;
+                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
+save("prob1_num_heatmap_S_star_t9.png", fig_heat_S_star_9)
 
 println("All Complete Market solutions, simulations, and plots generated successfully!")
