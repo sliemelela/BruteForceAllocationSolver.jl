@@ -27,8 +27,11 @@ export generate_gaussian_shocks
 
 # Export the analysis and plotting tools
 export create_policy_interpolators, calculate_equivalent_consumption_stream, calculate_certainty_equivalent
-export plot_mean_with_bounds, plot_shock_comparison, plot_policy_vs_state
-export plot_policy_heatmap, plot_value_function, plot_paths_overlay
+
+# --- NEW EXPORTS ---
+export plot_heatmap, plot_curves, plot_mean_with_bounds
+export plot_shock_comparison, plot_paths_overlay
+export plot_objective_curve, plot_deterministic_glidepath, plot_wealth_composition
 
 # Include the separated files
 include("core.jl")
@@ -36,6 +39,6 @@ include("strategies.jl")
 include("transitions.jl")
 include("grids.jl")
 include("analysis.jl")
-
+include("plotting.jl")
 
 end
