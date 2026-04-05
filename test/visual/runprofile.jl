@@ -10,7 +10,7 @@ G_w = 200
 W_grid = generate_log_spaced_grid(1.0, 100.0, G_w)
 Z_grids = [generate_linear_grid(0.0, 0.10, 5)] # 1 Auxiliary state
 
-omega_space = [SVector(w) for w in range(0.0, 1.0, length=51)]
+omega_space = [SVector(w) for w in range(0.0, 1.0, length=201)]
 ε_nodes, W_weights = generate_gaussian_shocks(2, 5, [1.0 0.0; 0.0 1.0])
 
 transition = make_stochastic_r_constant_mu_transition(0.1, 0.03, 0.01, 0.07, 0.20, 0.0, dt)
@@ -32,7 +32,7 @@ println("Profiling...")
 )
 
 # Alternatively, if you want to see exact memory allocations printed to the REPL, use @time:
-@time solve_dynamic_program(
+@benchmark solve_dynamic_program(
     BruteForceSolver(), W_grid, Z_grids, omega_space,
     ε_nodes, W_weights, transition, M, u, exp, log_budget_constraint, extrap
 )
