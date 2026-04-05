@@ -263,326 +263,67 @@ save("analytical_eq37_wN_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, 
 save("analytical_eq37_wI_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_9; title="Eq 37: ILB WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 save("analytical_eq37_wS_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_9; title="Eq 37: Stock WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 
-# ==============================================================================
-# 4. Numerical DP Setup (Complete Market - 3 Assets, Total Wealth)
-# ==============================================================================
-println("\nSetting up Numerical Grids...")
-
-G_w = 150
-W_grid = generate_log_spaced_grid(10.0, 300.0, G_w)
-
-Z_grids = [
-    generate_linear_grid(-0.02, 0.06, 10),  # r_grid
-    generate_linear_grid(-0.02, 0.06, 10)   # π_grid
-]
-
-# Tighter, higher-resolution portfolio bounds
-omega_space = SVector{3, Float64}[]
-for w_N in range(0.0, 6.0, length=21)
-    for w_I in range(0.0, 1.0, length=21)
-        for w_S in range(0.0, 3.0, length=21)
-            push!(omega_space, SVector(w_N, w_I, w_S))
-        end
-    end
-end
-ε_nodes, W_weights = generate_gaussian_shocks(3, 3, ρ_mat)
-
-function make_problem1_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
-    B_r_N = B_r(τ_N)
-    B_r_I = B_r(τ_I)
-    B_π_I = B_π(τ_I)
-
-    vol_N_r = -B_r_N * σ_r
-    vol_I_r = -B_r_I * σ_r
-    vol_I_π = B_π_I * σ_π
-
-    var_N = vol_N_r^2
-    var_I = vol_I_r^2 + vol_I_π^2 + 2 * ρ_rπ * vol_I_r * vol_I_π
-    var_S = σ_S^2
-
-    return function(Z, ε)
-        r_n, π_n = Z[1], Z[2]
-        ε_r, ε_π, ε_S = ε[1], ε[2], ε[3]
-
-        r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.02, 0.06)
-        π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06, 0.10)
-        Z_next = SVector(r_next, π_next) # <--- UPDATED to SVector
-
-        Rf_nom = exp(r_n * dt)
-
-        drift_N = r_n - λ_r * σ_r * B_r_N
-        R_N = exp((drift_N - 0.5 * var_N) * dt + vol_N_r * sqrt(dt) * ε_r)
-
-        drift_I = r_n - λ_r * σ_r * B_r_I + λ_π * σ_π * B_π_I
-        R_I = exp((drift_I - 0.5 * var_I) * dt + vol_I_r * sqrt(dt) * ε_r + vol_I_π * sqrt(dt) * ε_π)
-
-        drift_S = r_n + λ_S * σ_S
-        R_S = exp((drift_S - 0.5 * var_S) * dt + σ_S * sqrt(dt) * ε_S)
-
-        Re = SVector(R_N - Rf_nom, R_I - Rf_nom, R_S - Rf_nom) # <--- UPDATED to SVector
-        R_base_real = exp((r_n - π_n) * dt)
-
-        return Z_next, Re, R_base_real
-    end
-end
-
-transition_prob1 = make_problem1_transition(κ_r, overline_r, σ_r, λ_r, τ_N, κ_π, overline_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
-
-function problem1_budget_constraint(W, c, ω, R_e, R_base)
-    W_next = W * (dot(ω, R_e) + R_base)
-    return max(W_next, 1e-10)
-end
-crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
-
-
-# ==============================================================================
-# 5. DP Execution & Numerical Baseline Evaluation
-# ==============================================================================
-println("Solving Dynamic Program (Pure Terminal Wealth)...")
-V, pol_w = solve_dynamic_program(
-    BruteForceSolver(), # <--- NEW API REQUIREMENT
-    W_grid, Z_grids, omega_space,
-    ε_nodes, W_weights, transition_prob1,
-    M, u, identity, problem1_budget_constraint, crra_ex
-)
-
-# Extract Numerical CE using W_0 calculated from analytical step
-V_interp = linear_interpolation((W_grid, Z_grids[1], Z_grids[2]), V[:, :, :, 1], extrapolation_bc=Line())
-V_0_num = V_interp(W_0, r_0, π_0)
-CE_0_num = calculate_certainty_equivalent(V_0_num, inv_u)
-
-println("\n==================================================")
-println("Problem 1 (Complete Market) Final Comparison:")
-println("  Total Initial Wealth (W_0): ", round(W_0, digits=4))
-println("  Analytical CE:              ", round(analytical_CE, digits=4))
-println("  Numerical CE:               ", round(CE_0_num, digits=4))
-println("  Discretization Friction:    ", round(analytical_CE - CE_0_num, digits=4))
-println("==================================================")
-
-
-# ==============================================================================
-# 6. Forward Monte Carlo Simulation
-# ==============================================================================
-println("\nRunning Forward Monte Carlo Simulation...")
-
-dummy_pol_c = zeros(size(pol_w))
-_, interp_w = create_policy_interpolators(dummy_pol_c, pol_w, W_grid, Z_grids)
-
-function extract_controls_prob1(W_paths, r_paths, pi_paths, interp_w, dt)
-    sims, steps = size(W_paths)
-    wN_sim, wI_sim, wS_sim = zeros(sims, steps), zeros(sims, steps), zeros(sims, steps)
-    for n in 1:steps
-        idx = min(length(interp_w), floor(Int, (n-1)*dt/dt) + 1)
-        for i in 1:sims
-            W = max(W_paths[i, n], 1e-5)
-            r, π_val = r_paths[i, n], pi_paths[i, n]
-            wN_sim[i, n] = interp_w[idx][1](W, r, π_val)
-            wI_sim[i, n] = interp_w[idx][2](W, r, π_val)
-            wS_sim[i, n] = interp_w[idx][3](W, r, π_val)
-        end
-    end
-    return wN_sim, wI_sim, wS_sim
-end
-
-rate_proc = VasicekProcess(:r, κ_r, overline_r, σ_r, r_0, 1)
-pi_proc   = VasicekProcess(:pi, κ_π, overline_π, σ_π, π_0, 2)
-
-B_r_N = (1.0 - exp(-κ_r * τ_N)) / κ_r
-B_r_I = (1.0 - exp(-κ_r * τ_I)) / κ_r
-B_pi_I = (1.0 - exp(-κ_π * τ_I)) / κ_π
-
-drift_W1(t, W, r_val, pi_val) = begin
-    idx = min(M, floor(Int, t/dt) + 1)
-    W_safe = max(W, 1e-5)
-    ω_N = interp_w[idx][1](W_safe, r_val, pi_val)
-    ω_I = interp_w[idx][2](W_safe, r_val, pi_val)
-    ω_S = interp_w[idx][3](W_safe, r_val, pi_val)
-
-    RP_N = ω_N * (-λ_r * σ_r * B_r_N)
-    RP_I = ω_I * (-λ_r * σ_r * B_r_I + λ_π * σ_π * B_pi_I)
-    RP_S = ω_S * (λ_S * σ_S)
-
-    return W_safe * (RP_N + RP_I + RP_S + r_val - pi_val)
-end
-
-diff_W1(t, W, r_val, pi_val) = begin
-    idx = min(M, floor(Int, t/dt) + 1)
-    W_safe = max(W, 1e-5)
-    ω_N = interp_w[idx][1](W_safe, r_val, pi_val)
-    ω_I = interp_w[idx][2](W_safe, r_val, pi_val)
-    ω_S = interp_w[idx][3](W_safe, r_val, pi_val)
-
-    diff_r = W_safe * (-ω_N * B_r_N * σ_r - ω_I * B_r_I * σ_r)
-    diff_pi = W_safe * (ω_I * B_pi_I * σ_π)
-    diff_S = W_safe * (ω_S * σ_S)
-    return [diff_r, diff_pi, diff_S]
-end
-
-w1_proc = GenericSDEProcess(:W, drift_W1, diff_W1, W_0, [1, 2, 3], [:r, :pi])
-
-conf_prob1 = MarketConfig(sims=500, T=T, dt=dt, M=M, processes=[rate_proc, pi_proc, w1_proc], correlations=ρ_mat)
-world_1 = build_world(conf_prob1)
-
-wN_sim, wI_sim, wS_sim = extract_controls_prob1(world_1.paths.W, world_1.paths.r, world_1.paths.pi, interp_w, dt)
-
-
-# ==============================================================================
-# 7. Post-Processing: Extracting Numerical w* (Equation 37 Transformation)
-# ==============================================================================
-println("Calculating transformed w* weights...")
-
-# 1. Helper to calculate Human Capital Durations (Updated for fractional dt)
-function get_HC_and_durations(t_step, r_val, pi_val)
-    H_t = 0.0
-    D_r_num = 0.0
-    D_pi_num = 0.0
-
-    t = (t_step - 1) * dt # Current physical time
-
-    # Loop over future integer steps directly
-    for step in t_step:M
-        s = step * dt
-        h = s - t
-        # A_I, B_r, and B_π are already defined in your Analytical Baseline section
-        P_real = exp(A_I(h) - B_r(h)*r_val + B_π(h)*pi_val)
-        income = 1.0 * dt
-
-        H_t += income * P_real
-        D_r_num += income * P_real * B_r(h)
-        D_pi_num += income * P_real * B_π(h)
-    end
-
-    if H_t < 1e-8 return 0.0, 0.0, 0.0 end
-    return D_r_num / H_t, D_pi_num / H_t, H_t
-end
-
-# 2. Function to transform numerical interpolators into w*
-function get_numerical_w_star(t_step, F_val, r_val, pi_val)
-    t = (t_step - 1) * dt
-    h = T - t
-    if h < 1e-8 return 0.0, 0.0, 0.0 end
-
-    # Pass the integer t_step directly
-    D_r, D_pi, H_t = get_HC_and_durations(t_step, r_val, pi_val)
-
-    # Implied Total Wealth
-    W_t = F_val + H_t
-
-    # Get Numerical Tilde Weights (from DP interpolation)
-    wN_tilde = interp_w[t_step][1](W_t, r_val, pi_val)
-    wI_tilde = interp_w[t_step][2](W_t, r_val, pi_val)
-    wS_tilde = interp_w[t_step][3](W_t, r_val, pi_val)
-
-    # Apply Equation 37
-    wN_star = (W_t / F_val) * wN_tilde + (H_t / F_val) * (D_pi / B_π(h) - D_r / B_r(h))
-    wI_star = (W_t / F_val) * wI_tilde - (H_t / F_val) * (D_pi / B_π(h))
-    wS_star = (W_t / F_val) * wS_tilde
-
-    return wN_star, wI_star, wS_star
-end
-
-# ==============================================================================
-# 8. Generating Numerical DP Plots
-# ==============================================================================
-println("Generating and saving numerical plots...")
-
-# Find the exact index closest to W = 150.0
-fixed_w_idx = argmin(abs.(W_grid .- 150.0))
-fixed_W_val = round(W_grid[fixed_w_idx], digits=2)
-fixed_r_idx = 3
-fixed_pi_idx = 3
-
-labels_time = ["t = 1", "t = 5", "t = 10"]
-
-# Plot 1 & 2: Value & CE
-fig_v = plot_curves(W_grid, [V[:, fixed_r_idx, fixed_pi_idx, 1], V[:, fixed_r_idx, fixed_pi_idx, 5], V[:, fixed_r_idx, fixed_pi_idx, 10]], labels_time;
-                    title="Prob 1: Expected Utility V(W) (r=0.02, π=0.02)", xlabel="Total Real Wealth (W)", ylabel="Utility", legend_pos=:rb)
-save("prob1_num_value_function.png", fig_v)
-
-time_axis = 1:M
-ce_over_time = [calculate_certainty_equivalent(V[fixed_w_idx, fixed_r_idx, fixed_pi_idx, t], inv_u) for t in time_axis]
-fig_ce_time = plot_curves(time_axis, [ce_over_time], ["CE Total Wealth"];
-                          title="Prob 1: CE Progression (W=$fixed_W_val, r=0.02, π=0.02)", xlabel="Time Step (t)", ylabel="Guaranteed Terminal Wealth", legend_pos=:rt)
-save("prob1_num_ce_progression.png", fig_ce_time)
-
-# Plot 3-5: MC Mean Strategy
-fig_mean_wN = plot_mean_with_bounds(wN_sim; title="Mean Nominal Bond Allocation", ylabel="Weight", color=:blue)
-save("prob1_num_mean_nominal_bond.png", fig_mean_wN)
-fig_mean_wI = plot_mean_with_bounds(wI_sim; title="Mean ILB Allocation", ylabel="Weight", color=:purple)
-save("prob1_num_mean_ilb.png", fig_mean_wI)
-fig_mean_wS = plot_mean_with_bounds(wS_sim; title="Mean Stock Allocation", ylabel="Weight", color=:green)
-save("prob1_num_mean_stock.png", fig_mean_wS)
-
-# Plot 6-8: Untransformed Heatmaps (Total Wealth w-tilde)
-slice_N_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][1] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
-slice_I_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][2] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
-slice_S_r_vs_pi = [pol_w[fixed_w_idx, r, pi, 1][3] for r in 1:length(Z_grids[1]), pi in 1:length(Z_grids[2])]
-
-fig_heat_N_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_r_vs_pi;
-                               title="Prob 1: Nominal Bond Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_N_tilde.png", fig_heat_N_r_pi)
-
-fig_heat_I_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_r_vs_pi;
-                               title="Prob 1: ILB Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_I_tilde.png", fig_heat_I_r_pi)
-
-fig_heat_S_r_pi = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_r_vs_pi;
-                               title="Prob 1: Stock Policy (W=$fixed_W_val, t=1)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_S_tilde.png", fig_heat_S_r_pi)
-
-# Plot 9-11: Transformed Heatmaps (Financial Wealth w-star)
-t_idx = 1
-slice_N_star = [get_numerical_w_star(t_idx, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
-slice_I_star = [get_numerical_w_star(t_idx, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
-slice_S_star = [get_numerical_w_star(t_idx, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
-
-fig_heat_N_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star;
-                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_N_star.png", fig_heat_N_star)
-
-fig_heat_I_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star;
-                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_I_star.png", fig_heat_I_star)
-
-fig_heat_S_star = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star;
-                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_S_star.png", fig_heat_S_star)
-
-# Plot 12-14: Transformed Heatmaps at t=5 (Index 6)
-t_idx_5 = 6
-slice_N_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
-slice_I_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
-slice_S_star_5 = [get_numerical_w_star(t_idx_5, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
-
-fig_heat_N_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star_5;
-                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_N_star_t5.png", fig_heat_N_star_5)
-
-fig_heat_I_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star_5;
-                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_I_star_t5.png", fig_heat_I_star_5)
-
-fig_heat_S_star_5 = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star_5;
-                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=5)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_S_star_t5.png", fig_heat_S_star_5)
-
-
-# Plot 15-17: Transformed Heatmaps at t=9 (Index 10)
-t_idx_9 = 10
-slice_N_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[1] for r in Z_grids[1], pi in Z_grids[2]]
-slice_I_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[2] for r in Z_grids[1], pi in Z_grids[2]]
-slice_S_star_9 = [get_numerical_w_star(t_idx_9, F_0, r, pi)[3] for r in Z_grids[1], pi in Z_grids[2]]
-
-fig_heat_N_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_N_star_9;
-                               title="Prob 1 Numerical: Nominal Bond w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_N_star_t9.png", fig_heat_N_star_9)
-
-fig_heat_I_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_I_star_9;
-                               title="Prob 1 Numerical: ILB w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_I_star_t9.png", fig_heat_I_star_9)
-
-fig_heat_S_star_9 = plot_heatmap(Z_grids[1], Z_grids[2], slice_S_star_9;
-                               title="Prob 1 Numerical: Stock w* (F=$F_0, t=9)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight")
-save("prob1_num_heatmap_S_star_t9.png", fig_heat_S_star_9)
-
-println("All Complete Market solutions, simulations, and plots generated successfully!")
+# # ==============================================================================
+# # ADJUST: 6. Forward Monte Carlo Simulation
+# # ==============================================================================
+# println("\nRunning Forward Monte Carlo Simulation...")
+
+# dummy_pol_c = zeros(size(pol_w))
+# _, interp_w = create_policy_interpolators(dummy_pol_c, pol_w, W_grid, Z_grids)
+
+# function extract_controls_prob1(W_paths, r_paths, pi_paths, interp_w, dt)
+#     sims, steps = size(W_paths)
+#     wN_sim, wI_sim, wS_sim = zeros(sims, steps), zeros(sims, steps), zeros(sims, steps)
+#     for n in 1:steps
+#         idx = min(length(interp_w), floor(Int, (n-1)*dt/dt) + 1)
+#         for i in 1:sims
+#             W = max(W_paths[i, n], 1e-5)
+#             r, π_val = r_paths[i, n], pi_paths[i, n]
+#             wN_sim[i, n] = interp_w[idx][1](W, r, π_val)
+#             wI_sim[i, n] = interp_w[idx][2](W, r, π_val)
+#             wS_sim[i, n] = interp_w[idx][3](W, r, π_val)
+#         end
+#     end
+#     return wN_sim, wI_sim, wS_sim
+# end
+
+# rate_proc = VasicekProcess(:r, κ_r, overline_r, σ_r, r_0, 1)
+# pi_proc   = VasicekProcess(:pi, κ_π, overline_π, σ_π, π_0, 2)
+
+# B_r_N = (1.0 - exp(-κ_r * τ_N)) / κ_r
+# B_r_I = (1.0 - exp(-κ_r * τ_I)) / κ_r
+# B_pi_I = (1.0 - exp(-κ_π * τ_I)) / κ_π
+
+# drift_W1(t, W, r_val, pi_val) = begin
+#     idx = min(M, floor(Int, t/dt) + 1)
+#     W_safe = max(W, 1e-5)
+#     ω_N = interp_w[idx][1](W_safe, r_val, pi_val)
+#     ω_I = interp_w[idx][2](W_safe, r_val, pi_val)
+#     ω_S = interp_w[idx][3](W_safe, r_val, pi_val)
+
+#     RP_N = ω_N * (-λ_r * σ_r * B_r_N)
+#     RP_I = ω_I * (-λ_r * σ_r * B_r_I + λ_π * σ_π * B_pi_I)
+#     RP_S = ω_S * (λ_S * σ_S)
+
+#     return W_safe * (RP_N + RP_I + RP_S + r_val - pi_val)
+# end
+
+# diff_W1(t, W, r_val, pi_val) = begin
+#     idx = min(M, floor(Int, t/dt) + 1)
+#     W_safe = max(W, 1e-5)
+#     ω_N = interp_w[idx][1](W_safe, r_val, pi_val)
+#     ω_I = interp_w[idx][2](W_safe, r_val, pi_val)
+#     ω_S = interp_w[idx][3](W_safe, r_val, pi_val)
+
+#     diff_r = W_safe * (-ω_N * B_r_N * σ_r - ω_I * B_r_I * σ_r)
+#     diff_pi = W_safe * (ω_I * B_pi_I * σ_π)
+#     diff_S = W_safe * (ω_S * σ_S)
+#     return [diff_r, diff_pi, diff_S]
+# end
+
+# w1_proc = GenericSDEProcess(:W, drift_W1, diff_W1, W_0, [1, 2, 3], [:r, :pi])
+
+# conf_prob1 = MarketConfig(sims=500, T=T, dt=dt, M=M, processes=[rate_proc, pi_proc, w1_proc], correlations=ρ_mat)
+# world_1 = build_world(conf_prob1)
+
+# wN_sim, wI_sim, wS_sim = extract_controls_prob1(world_1.paths.W, world_1.paths.r, world_1.paths.pi, interp_w, dt)

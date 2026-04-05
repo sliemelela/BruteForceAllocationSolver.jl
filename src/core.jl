@@ -272,6 +272,8 @@ function optimize_controls(
     lower = vcat(minimum(c_grid), [minimum(reduce(hcat, omega_space), dims=2)...])
     upper = vcat(maximum(c_grid), [maximum(reduce(hcat, omega_space), dims=2)...])
 
+    x0 = clamp.(x0, lower .+ 1e-5, upper .- 1e-5)
+
     res = if solver.use_gradients
         g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)
         od = OnceDifferentiable(obj, g!, x0)
@@ -321,8 +323,10 @@ function optimize_controls(
     scale_factor = base_val > 1e-10 ? base_val : 1.0
     obj(x) = raw_obj(x) / scale_factor
 
-    lower = Vector(minimum(reduce(hcat, omega_space), dims=2))
-    upper = Vector(maximum(reduce(hcat, omega_space), dims=2))
+    lower = vec(minimum(reduce(hcat, omega_space), dims=2))
+    upper = vec(maximum(reduce(hcat, omega_space), dims=2))
+
+    x0 = clamp.(x0, lower .+ 1e-5, upper .- 1e-5)
 
     res = if solver.use_gradients
         g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)

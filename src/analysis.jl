@@ -10,7 +10,7 @@ function create_policy_interpolators(pol_c, pol_w, W_grid, Z_grids)
     # 1. Interpolate Consumption
     # We use Flat() extrapolation so if wealth goes off-grid during simulation,
     # the agent just uses the boundary policy.
-    interp_c = [linear_interpolation((W_grid, Z_grids...), selectdim(pol_c, ndims(pol_c), t), extrapolation_bc=Flat()) for t in 1:M]
+    interp_c = [linear_interpolation((W_grid, Z_grids...), selectdim(pol_c, ndims(pol_c), t), extrapolation_bc=Interpolations.Flat()) for t in 1:M]
 
     # 2. Interpolate Portfolio Weights
     N_assets = length(pol_w[1])
@@ -20,7 +20,7 @@ function create_policy_interpolators(pol_c, pol_w, W_grid, Z_grids)
         asset_interps = []
         for a in 1:N_assets
             w_slice = map(x -> x[a], selectdim(pol_w, ndims(pol_w), t))
-            push!(asset_interps, linear_interpolation((W_grid, Z_grids...), w_slice, extrapolation_bc=Flat()))
+            push!(asset_interps, linear_interpolation((W_grid, Z_grids...), w_slice, extrapolation_bc=Interpolations.Flat()))
         end
         push!(interp_w, asset_interps)
     end
