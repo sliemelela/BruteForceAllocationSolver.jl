@@ -3,7 +3,7 @@
 
 Used when the state is raw Wealth, and the control `c` is a fraction (0 to 1).
 """
-function fractional_consumption(W::Float64, c::Float64)
+function fractional_consumption(W::Real, c::Real)
     return c * W
 end
 
@@ -12,7 +12,7 @@ end
 
 Used when the state is Log-Wealth (X), and the control `c` is a fraction (0 to 1).
 """
-function log_fractional_consumption(X::Float64, c::Float64)
+function log_fractional_consumption(X::Real, c::Real)
     return c * exp(X)
 end
 
@@ -22,7 +22,7 @@ end
 Used when the control `c` is an absolute dollar amount, rather than a fraction.
 (The state is ignored because c is already the actual consumption).
 """
-function absolute_consumption(state::Float64, c::Float64)
+function absolute_consumption(state::Real, c::Real)
     return c
 end
 
@@ -70,11 +70,11 @@ to ``(W_{next} / W_{bound})^{1-\\gamma}``.
 - `γ::Float64`: The coefficient of relative risk aversion.
 
 # Returns
-- `Function`: A closure with the signature `(W_next::Float64, Z_next, V_next_interp) -> Float64`
+- `Function`: A closure with the signature `(W_next::Real, Z_next, V_next_interp) -> Float64`
   that safely evaluates future values inside or outside the defined grid bounds.
 """
 function make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
-    return function(W_next::Float64, Z_next, V_next_interp)
+    return function(W_next::Real, Z_next, V_next_interp)
         if W_next < W_min
             W_next = max(W_next, 1e-10) # Prevent log(0)
             return V_next_interp(W_min, Z_next...) * (W_next / W_min)^(1.0 - γ)
@@ -106,7 +106,7 @@ The absolute scaling ratio ``(W_{next} / W_{bound})^{1-\\gamma}`` mathematically
   that safely evaluates future values inside or outside the defined log-grid bounds.
 """
 function make_log_crra_extrapolator(X_min::Float64, X_max::Float64, γ::Float64)
-    return function(X_next::Float64, Z_next, V_next_interp)
+    return function(X_next::Real, Z_next, V_next_interp)
         if X_next < X_min
             # In log space, (W / W_min)^(1-γ) becomes exp((1-γ) * (X - X_min))
             return V_next_interp(X_min, Z_next...) * exp((1.0 - γ) * (X_next - X_min))

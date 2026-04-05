@@ -11,7 +11,7 @@ Evaluates the objective function using strictly typed precalculated transitions.
 This function is called inside the control grid search and is allocation-free.
 """
 function evaluate_bellman_objective(
-    W_n::Float64, c_n::Float64, ω_n,
+    W_n::Real, c_n::Real, ω_n,
     shocks_precalc::AbstractVector, W_weights::Vector{Float64},
     V_next::VType, β::Float64, u::UFunc,
     compute_consumption::CCFunc, budget_constraint::BFunc, extrapolator::EFunc
@@ -33,7 +33,7 @@ function evaluate_bellman_objective(
 end
 
 function evaluate_bellman_objective(
-    W_n::Float64, ω_n,
+    W_n::Real, ω_n,
     shocks_precalc::AbstractVector, W_weights::Vector{Float64},
     V_next::VType, budget_constraint::BFunc, extrapolator::EFunc
 ) where {VType, BFunc, EFunc}
@@ -227,26 +227,21 @@ end
 Finds the optimal controls using continuous optimization methods via Optim.jl.
 Utilizes Fminbox to ensure boundary compliance.
 """
-"""
-    optimize_controls(solver::OptimSolver, ...)
-
-Finds the optimal controls using continuous optimization methods via Optim.jl.
-Utilizes Fminbox to ensure boundary compliance.
-"""
 function optimize_controls(
     solver::OptimSolver,
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
     V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
     compute_consumption::CCFunc, budget_constraint::BFunc,
-    extrapolator::EFunc, warm_start_guess=nothing
+    extrapolator::EFunc;
+    warm_start_guess=nothing
 ) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
     function obj(x)
         c_val = x[1]
-        ω_val = SVector{length(omega_space[1]), Float64}(x[2:end])
+        ω_val = SVector{length(omega_space[1])}(x[2:end])
         return -evaluate_bellman_objective(
             W_n, c_val, ω_val, shocks_precalc, W_weights,
             V_next, β, u, compute_consumption, budget_constraint, extrapolator
@@ -256,10 +251,12 @@ function optimize_controls(
     x0 = if warm_start_guess !== nothing
         warm_start_guess
     else
+        # Safety checks for coarse ranges
         coarse_c = collect(range(minimum(c_grid), maximum(c_grid),
                            length=solver.coarse_warm_start_n))
-        coarse_ω = [omega_space[i] for i in 1:div(length(omega_space),
-                    solver.coarse_warm_start_n):length(omega_space)]
+
+        step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
+        coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
         _, bc, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_c, coarse_ω,
@@ -273,10 +270,9 @@ function optimize_controls(
     upper = vcat(maximum(c_grid), [maximum(reduce(hcat, omega_space), dims=2)...])
 
     res = if solver.use_gradients
-        optimize(
-            obj, lower, upper, x0, Fminbox(solver.method), Optim.Options();
-            autodiff=:forward
-        )
+        g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)
+        od = OnceDifferentiable(obj, g!, x0)
+        optimize(od, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     else
         optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     end
@@ -290,14 +286,14 @@ function optimize_controls(
     W_n::Float64, Z_n, omega_space,
     ε_nodes, W_weights::Vector{Float64},
     V_next::VType, transition_model::TMod,
-    budget_constraint::BFunc, extrapolator::EFunc,
+    budget_constraint::BFunc, extrapolator::EFunc;
     warm_start_guess=nothing
 ) where {VType, TMod, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
     function obj(x)
-        ω_val = SVector{length(omega_space[1]), Float64}(x)
+        ω_val = SVector{length(omega_space[1])}(x)
         return -evaluate_bellman_objective(
             W_n, ω_val, shocks_precalc, W_weights,
             V_next, budget_constraint, extrapolator
@@ -307,8 +303,8 @@ function optimize_controls(
     x0 = if warm_start_guess !== nothing
         warm_start_guess
     else
-        coarse_ω = [omega_space[i] for i in 1:div(length(omega_space),
-                    solver.coarse_warm_start_n):length(omega_space)]
+        step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
+        coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
         _, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_ω,
@@ -322,10 +318,9 @@ function optimize_controls(
     upper = Vector(maximum(reduce(hcat, omega_space), dims=2))
 
     res = if solver.use_gradients
-        optimize(
-            obj, lower, upper, x0, Fminbox(solver.method), Optim.Options();
-            autodiff=:forward
-        )
+        g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)
+        od = OnceDifferentiable(obj, g!, x0)
+        optimize(od, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     else
         optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     end
