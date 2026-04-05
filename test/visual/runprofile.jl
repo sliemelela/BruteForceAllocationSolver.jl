@@ -1,5 +1,6 @@
 using BruteForceAllocationSolver
 using StaticArrays
+using BenchmarkTools
 using Profile
 
 # 1. Setup a medium-sized problem (big enough to take a few seconds, small enough not to wait forever)
