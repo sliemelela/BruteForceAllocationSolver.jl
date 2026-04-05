@@ -115,37 +115,31 @@ nodes and weights for `D` dimensions.
 function generate_gaussian_shocks(
     D::Int, Q::Int, ρ::AbstractMatrix{Float64}=Matrix{Float64}(I, D, D)
 )
-    # 1. Get 1D nodes and scale to standard normal N(0, 1)
     nodes_1d, weights_1d = gausshermite(Q)
     nodes_std = nodes_1d .* sqrt(2.0)
     weights_std = weights_1d ./ sqrt(pi)
 
-    # 2. Cholesky decomposition of correlation matrix (Σ = L * L')
-    # Symmetric() prevents tiny floating point asymmetries from failing
-    L = cholesky(Symmetric(ρ)).L
+    # Convert L to an SMatrix for allocation-free matrix multiplication later
+    L = SMatrix{D, D, Float64}(cholesky(Symmetric(ρ)).L)
 
     total_nodes = Q^D
-    ε_nodes = Vector{Vector{Float64}}(undef, total_nodes)
+    ε_nodes = Vector{SVector{D, Float64}}(undef, total_nodes)
     W_weights = Vector{Float64}(undef, total_nodes)
 
-    # Pre-allocate the independent shock vector to avoid loop allocations
     z = zeros(Float64, D)
 
     idx = 1
-    # Iterators.product creates a lazy D-dimensional Cartesian product
     for indices in Iterators.product(ntuple(_ -> 1:Q, D)...)
         w = 1.0
-
-        # Build the independent shock vector and joint weight
         for d in 1:D
             i = indices[d]
             z[d] = nodes_std[i]
             w *= weights_std[i]
         end
 
-        # L * z correlates the independent standard normals.
-        # This inherently allocates the final vector we store in ε_nodes.
-        ε_nodes[idx] = L * z
+        # z_sv is static. L * z_sv is a static matrix-vector multiplication (0 allocations)
+        z_sv = SVector{D, Float64}(z...)
+        ε_nodes[idx] = L * z_sv
         W_weights[idx] = w
         idx += 1
     end

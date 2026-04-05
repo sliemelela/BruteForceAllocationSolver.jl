@@ -7,8 +7,10 @@ using Integrals
 using FastGaussQuadrature
 using Statistics
 using CairoMakie
+using StaticArrays
 
 # Export the core solver
+export AbstractAllocationSolver, BruteForceSolver
 export solve_dynamic_program
 
 # Export the built-in strategies
@@ -34,6 +36,7 @@ export plot_shock_comparison, plot_paths_overlay
 export plot_objective_curve, plot_deterministic_glidepath, plot_wealth_composition
 
 # Include the separated files
+include("types.jl")
 include("core.jl")
 include("strategies.jl")
 include("transitions.jl")

@@ -5,6 +5,7 @@ using CairoMakie
 using LinearAlgebra
 using Statistics
 using Interpolations
+using StaticArrays
 
 println("==================================================")
 println("Setting up Problem 1 (Complete Market) Master Script")
@@ -276,11 +277,11 @@ Z_grids = [
 ]
 
 # Tighter, higher-resolution portfolio bounds
-omega_space = Vector{Float64}[]
+omega_space = SVector{3, Float64}[]
 for w_N in range(0.0, 6.0, length=21)
     for w_I in range(0.0, 1.0, length=21)
         for w_S in range(0.0, 3.0, length=21)
-            push!(omega_space, [w_N, w_I, w_S])
+            push!(omega_space, SVector(w_N, w_I, w_S))
         end
     end
 end
@@ -299,13 +300,13 @@ function make_problem1_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ
     var_I = vol_I_r^2 + vol_I_π^2 + 2 * ρ_rπ * vol_I_r * vol_I_π
     var_S = σ_S^2
 
-    return function(Z::Vector{Float64}, ε::Vector{Float64})
+    return function(Z, ε)
         r_n, π_n = Z[1], Z[2]
         ε_r, ε_π, ε_S = ε[1], ε[2], ε[3]
 
         r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.02, 0.06)
         π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06, 0.10)
-        Z_next = [r_next, π_next]
+        Z_next = SVector(r_next, π_next) # <--- UPDATED to SVector
 
         Rf_nom = exp(r_n * dt)
 
@@ -318,7 +319,7 @@ function make_problem1_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ
         drift_S = r_n + λ_S * σ_S
         R_S = exp((drift_S - 0.5 * var_S) * dt + σ_S * sqrt(dt) * ε_S)
 
-        Re = [R_N - Rf_nom, R_I - Rf_nom, R_S - Rf_nom]
+        Re = SVector(R_N - Rf_nom, R_I - Rf_nom, R_S - Rf_nom) # <--- UPDATED to SVector
         R_base_real = exp((r_n - π_n) * dt)
 
         return Z_next, Re, R_base_real
@@ -339,6 +340,7 @@ crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 # ==============================================================================
 println("Solving Dynamic Program (Pure Terminal Wealth)...")
 V, pol_w = solve_dynamic_program(
+    BruteForceSolver(), # <--- NEW API REQUIREMENT
     W_grid, Z_grids, omega_space,
     ε_nodes, W_weights, transition_prob1,
     M, u, identity, problem1_budget_constraint, crra_ex

@@ -8,7 +8,7 @@
     G_w = 200
     W_grid = generate_log_spaced_grid(1.0, 100.0, G_w)
     Z_grids = Vector{Float64}[]
-    omega_space = [[w] for w in range(0.0, 1.0, length=101)]
+    omega_space = [SVector(w) for w in range(0.0, 1.0, length=101)]
 
     ρ_mat = fill(1.0, 1, 1)
     ε_nodes, W_weights = generate_gaussian_shocks(1, 10, ρ_mat)
@@ -20,6 +20,7 @@
     crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
     V_term, pol_w_term = solve_dynamic_program(
+        BruteForceSolver(),
         W_grid, Z_grids, omega_space,
         ε_nodes, W_weights, merton_transition,
         M, u, identity, standard_budget_constraint, crra_ex

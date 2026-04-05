@@ -1,4 +1,3 @@
-
 @testset "Merton Benchmark Test" begin
 
     # Define amount of timesteps, stepsize etc.
@@ -19,7 +18,7 @@
     W_grid = generate_log_spaced_grid(W_min, W_max, G_w)
     Z_grids = Vector{Float64}[]
     c_grid = collect(range(c_min, c_max, length=G_c))
-    omega_space = [[ω] for ω in range(ω_min, ω_max, length=G_ω)]
+    omega_space = [SVector(ω) for ω in range(ω_min, ω_max, length=G_ω)]
 
     # Generate 1D integration nodes using the new automated function
     ρ_mat = fill(1.0, 1, 1) # 1x1 correlation matrix for 1D
@@ -36,6 +35,7 @@
 
     # Run the solver
     V, pol_c, pol_w = solve_dynamic_program(
+        BruteForceSolver(),
         W_grid, Z_grids, c_grid, omega_space,
         ε_nodes, W_weights, merton_transition,
         M, β, u, fractional_consumption,
@@ -65,7 +65,7 @@ end
     M = 10
     β = 0.96
     c_grid = collect(range(0.01, 0.99, length=50))
-    omega_space = [[w] for w in range(0.0, 1.0, length=101)]
+    omega_space = [SVector(w) for w in range(0.0, 1.0, length=101)]
 
     # 3. Generate 1D integration nodes
     ρ_mat = fill(1.0, 1, 1)
@@ -79,6 +79,7 @@ end
 
     # 6. Run the solver!
     V, pol_c, pol_w = solve_dynamic_program(
+        BruteForceSolver(),
         X_grid, Z_grids, c_grid, omega_space,
         ε_nodes, X_weights, merton_transition,
         M, β, u, log_fractional_consumption,

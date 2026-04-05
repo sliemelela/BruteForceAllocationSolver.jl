@@ -28,10 +28,12 @@ subjective discount factor $\beta$.
 
 ### 1. Setup Parameters and Grids
 First, we define our economic parameters and generate the grids for our
-state and control variables.
+state and control variables. Notice we use `StaticArrays` to ensure the core
+engine runs with zero memory allocations.
 
 ```julia
 using BruteForceAllocationSolver
+using StaticArrays
 
 # Define Model Parameters
 M = 10           # Number of timesteps
@@ -51,7 +53,8 @@ W_grid = generate_log_spaced_grid(W_min, W_max, G_w)
 Z_grids = Vector{Float64}[] # No auxiliary state variables in this model
 
 # Control grid: Portfolio weight. Notice we do NOT define a consumption grid!
-omega_space = [[w] for w in generate_linear_grid(0.0, 1.0, 101)]
+# We use SVector to guarantee allocation-free performance in the inner loop.
+omega_space = [SVector(w) for w in generate_linear_grid(0.0, 1.0, 101)]
 ```
 
 ### 2. Integration Nodes
@@ -86,6 +89,7 @@ crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
 # Run the Solver!
 V, pol_w = solve_dynamic_program(
+    BruteForceSolver(),           # Strategy: The solving algorithm to use
     W_grid, Z_grids, omega_space,
     ε_nodes, W_weights, merton_transition,
     M, u,
@@ -123,6 +127,7 @@ log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
 # Notice we pass the built-in `exp` function to tell the solver how to
 # un-log the state variable before passing it into the utility function u(W).
 V_log, pol_w_log = solve_dynamic_program(
+    BruteForceSolver(),
     X_grid, Z_grids, omega_space,
     ε_nodes, W_weights, merton_transition,
     M, u,
@@ -167,6 +172,7 @@ stoch_transition = make_stochastic_r_constant_premium_transition(
 
 # 4. Run the solver!
 V_stoch, pol_w_stoch = solve_dynamic_program(
+    BruteForceSolver(),
     X_grid, Z_grids, omega_space,
     ε_nodes_2d, W_weights_2d, stoch_transition,
     M, u,
@@ -204,6 +210,7 @@ c_grid = generate_linear_grid(0.01, 0.99, G_c)
 # Notice we pass `c_grid`, `β`, and a `compute_consumption` strategy.
 # We drop `state_to_wealth` because utility is evaluated on consumption!
 V_cons, pol_c, pol_w_cons = solve_dynamic_program(
+    BruteForceSolver(),
     W_grid, Z_grids, c_grid, omega_space,
     ε_nodes_2d, W_weights_2d, stoch_transition,
     M, β, u,

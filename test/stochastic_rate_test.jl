@@ -1,4 +1,3 @@
-
 @testset "Stochastic Interest Rate Models (2D Quadrature)" begin
     # 1. Base Parameters
     M, dt, γ = 5, 1.0, 5.0
@@ -12,7 +11,7 @@
     G_r = 11
     Z_grids = [generate_linear_grid(0.0, 0.10, G_r)]
 
-    omega_space = [[w] for w in generate_linear_grid(0.0, 1.0, 101)]
+    omega_space = [SVector(w) for w in generate_linear_grid(0.0, 1.0, 101)]
 
     # 3. 2D Quadrature Integration Setup
     ρ_val = 0.0 # Correlation between interest rate and stock shocks
@@ -35,6 +34,7 @@
     )
 
     _, pol_w_mu = solve_dynamic_program(
+        BruteForceSolver(),
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_mu,
         M, u, exp, log_budget_constraint, log_extrapolator
@@ -60,6 +60,7 @@
     )
 
     _, pol_w_premium = solve_dynamic_program(
+        BruteForceSolver(), # <--- NEW API REQUIREMENT
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_premium,
         M, u, exp, log_budget_constraint, log_extrapolator
