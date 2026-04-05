@@ -8,6 +8,7 @@ using FastGaussQuadrature
 using Statistics
 using CairoMakie
 using StaticArrays
+using Optim
 
 # Export the core solver
 export AbstractAllocationSolver, BruteForceSolver
@@ -30,7 +31,7 @@ export generate_gaussian_shocks
 # Export the analysis and plotting tools
 export create_policy_interpolators, calculate_equivalent_consumption_stream, calculate_certainty_equivalent
 
-# --- NEW EXPORTS ---
+# Export plotting
 export plot_heatmap, plot_curves, plot_mean_with_bounds
 export plot_shock_comparison, plot_paths_overlay
 export plot_objective_curve, plot_deterministic_glidepath, plot_wealth_composition
