@@ -239,7 +239,7 @@ function optimize_controls(
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
-    function obj(x)
+    function raw_obj(x)
         c_val = x[1]
         ω_val = SVector{length(omega_space[1])}(x[2:end])
         return -evaluate_bellman_objective(
@@ -251,7 +251,6 @@ function optimize_controls(
     x0 = if warm_start_guess !== nothing
         warm_start_guess
     else
-        # Safety checks for coarse ranges
         coarse_c = collect(range(minimum(c_grid), maximum(c_grid),
                            length=solver.coarse_warm_start_n))
 
@@ -266,6 +265,10 @@ function optimize_controls(
         vcat(bc, bω...)
     end
 
+    base_val = abs(raw_obj(x0))
+    scale_factor = base_val > 1e-10 ? base_val : 1.0
+    obj(x) = raw_obj(x) / scale_factor
+
     lower = vcat(minimum(c_grid), [minimum(reduce(hcat, omega_space), dims=2)...])
     upper = vcat(maximum(c_grid), [maximum(reduce(hcat, omega_space), dims=2)...])
 
@@ -278,7 +281,7 @@ function optimize_controls(
     end
 
     sol = Optim.minimizer(res)
-    return -Optim.minimum(res), sol[1], SVector{length(omega_space[1])}(sol[2:end])
+    return -Optim.minimum(res) * scale_factor, sol[1], SVector{length(omega_space[1])}(sol[2:end])
 end
 
 function optimize_controls(
@@ -292,7 +295,7 @@ function optimize_controls(
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
-    function obj(x)
+    function raw_obj(x)
         ω_val = SVector{length(omega_space[1])}(x)
         return -evaluate_bellman_objective(
             W_n, ω_val, shocks_precalc, W_weights,
@@ -314,19 +317,23 @@ function optimize_controls(
         Vector(bω)
     end
 
+    base_val = abs(raw_obj(x0))
+    scale_factor = base_val > 1e-10 ? base_val : 1.0
+    obj(x) = raw_obj(x) / scale_factor
+
     lower = Vector(minimum(reduce(hcat, omega_space), dims=2))
     upper = Vector(maximum(reduce(hcat, omega_space), dims=2))
 
     res = if solver.use_gradients
         g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)
         od = OnceDifferentiable(obj, g!, x0)
-        optimize(od, lower, upper, x0, Fminbox(solver.method), Optim.Options())
+        optimize(od, lower, upper, x0, Fminbox(solver.method), solver.optim_options)
     else
-        optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
+        optimize(obj, lower, upper, x0, Fminbox(solver.method), solver.optim_options)
     end
 
     sol = Optim.minimizer(res)
-    return -Optim.minimum(res), SVector{length(omega_space[1])}(sol)
+    return -Optim.minimum(res) * scale_factor, SVector{length(omega_space[1])}(sol)
 end
 
 """

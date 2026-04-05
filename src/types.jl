@@ -33,7 +33,7 @@ Base.@kwdef struct OptimSolver{T} <: AbstractAllocationSolver
     use_gradients::Bool = true
     coarse_warm_start_n::Int = 10
     optim_options::Optim.Options = Optim.Options(
-        g_abstol = 1e-10,
+        g_abstol = 1e-8,
         outer_g_abstol = 1e-10,
         x_abstol = 1e-4,
         f_reltol = 1e-8
