@@ -21,15 +21,15 @@ The expectation is approximated using numerical quadrature integration over the 
 - `W_weights::Vector{Float64}`: The quadrature weights corresponding to each node.
 - `V_next`: A callable multidimensional interpolation object representing the future
     value function ``V_{n+1}``.
-- `transition_model::Function`: The market dynamics function.
+- `transition_model`: The market dynamics function.
     Expected signature: `(Z, ε) -> (Z_next, R_e, R_base)`.
 - `β::Float64`: The subjective discount factor.
-- `u::Function`: The pure utility function. Expected signature: `u(C_actual)`.
-- `compute_consumption::Function`: Strategy to convert the state and control into absolute
+- `u`: The pure utility function. Expected signature: `u(C_actual)`.
+- `compute_consumption`: Strategy to convert the state and control into absolute
     physical consumption (e.g.  `(W,c) -> c * W or (X, c) -> c * exp(X)`).
-- `budget_constraint::Function`: Strategy dictating how the main state variable transitions
-    Expected signature: `(W, c, ω, R_e, R_base) -> W_next`
-- `extrapolator::Function`: Strategy dictating how to evaluate `V_next` when future states
+- `budget_constraint`: Strategy dictating how the main state variable transitions
+    Expected signature: `(W, c, ω, R_e, R_base) -> W_next`.
+- `extrapolator`: Strategy dictating how to evaluate `V_next` when future states
     fall outside the defined grid bounds.
 
 # Returns
@@ -39,9 +39,9 @@ Evaluates to `-Inf` if the consumption rule results in zero or negative physical
 function evaluate_bellman_objective(
     W_n::Float64, Z_n, c_n::Float64, ω_n,
     ε_nodes, W_weights::Vector{Float64},
-    V_next, transition_model::Function, β::Float64, u::Function,
-    compute_consumption::Function, budget_constraint::Function, extrapolator::Function
-)
+    V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
+    compute_consumption::CCFunc, budget_constraint::BFunc, extrapolator::EFunc
+) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
     expected_future_value = 0.0
 
     for j in 1:length(ε_nodes)
@@ -66,9 +66,9 @@ end
 function evaluate_bellman_objective(
     W_n::Float64, Z_n, ω_n,
     ε_nodes, W_weights::Vector{Float64},
-    V_next, transition_model::Function,
-    budget_constraint::Function, extrapolator::Function
-)
+    V_next::VType, transition_model::TMod,
+    budget_constraint::BFunc, extrapolator::EFunc
+) where {VType, TMod, BFunc, EFunc}
     expected_future_value = 0.0
 
     for j in 1:length(ε_nodes)
@@ -90,18 +90,36 @@ function evaluate_bellman_objective(
 end
 
 """
-    optimize_controls_brute_force(...)
+    optimize_controls_brute_force(
+        W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
+        ε_nodes, W_weights::Vector{Float64},
+        V_next, transition_model, β::Float64, u,
+        compute_consumption, budget_constraint, extrapolator
+    )
 
 Finds the optimal consumption and portfolio controls for a specific state `(W_n, Z_n)`
 using an exhaustive grid search.
+Iterates over every combination of consumption in `c_grid` and portfolio weights in `omega_space`,
+evaluates the Bellman objective, and returns the combination that maximizes the value function.
+
+# Arguments
+- `c_grid::Vector{Float64}`: The discretized 1D grid of possible consumption choices.
+- `omega_space`: An iterable collection of portfolio weight vectors.
+*(See [`evaluate_bellman_objective`](@ref) for the remaining arguments.)*.
+
+# Returns
+A 3-tuple containing:
+- `best_val::Float64`: The maximum value achieved.
+- `best_c::Float64`: The optimal consumption choice.
+- `best_ω`: The optimal portfolio weight vector.
 """
 function optimize_controls_brute_force(
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next, transition_model::Function, β::Float64, u::Function,
-    compute_consumption::Function, budget_constraint::Function,
-    extrapolator::Function
-)
+    V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
+    compute_consumption::CCFunc, budget_constraint::BFunc,
+    extrapolator::EFunc
+) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
     best_val = -Inf
     best_c = 0.0
     best_ω = first(omega_space)
@@ -126,9 +144,9 @@ end
 function optimize_controls_brute_force(
     W_n::Float64, Z_n, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next, transition_model::Function,
-    budget_constraint::Function, extrapolator::Function
-)
+    V_next::VType, transition_model::TMod,
+    budget_constraint::BFunc, extrapolator::EFunc
+) where {VType, TMod, BFunc, EFunc}
     best_val = -Inf
     best_ω = first(omega_space)
 
@@ -160,6 +178,33 @@ end
 
 Solves a finite-horizon dynamic programming problem for portfolio and consumption choice
 using backwards recursion.
+The solver evaluates the problem over `M` time steps. It builds multidimensional linear
+interpolations of the future value function at each step and executes the state-space evaluation
+in parallel across available threads.
+The solver is purely agnostic and relies entirely on the
+injected strategy functions to dictate the economic structure of the model.
+
+# Arguments
+- `solver`: The chosen allocation solver (e.g., `BruteForceSolver()`).
+- `W_grid::Vector{Float64}`: The grid for the principal state variable (e.g., Wealth or Log-Wealth).
+- `Z_grids::Vector{Vector{Float64}}`: A list of grids for auxiliary state variables.
+- `c_grid::Vector{Float64}`: The grid of valid consumption choices.
+- `omega_space`: The space of valid portfolio weight vectors.
+- `ε_nodes`: Multidimensional quadrature nodes for the expectation integral.
+- `W_weights::Vector{Float64}`: Corresponding multidimensional quadrature weights.
+- `transition_model`: The market dynamics generator.
+- `M::Int`: The total number of decision time steps (excluding the terminal date).
+- `β::Float64`: The subjective discount factor.
+- `u`: The pure utility function.
+- `compute_consumption`: The strategy defining how controls translate into physical consumption.
+- `budget_constraint`: The strategy defining how the principal state variable evolves over time.
+- `extrapolator`: The strategy defining how to handle evaluations outside the `W_grid` boundaries.
+
+# Returns
+A 3-tuple of multidimensional arrays `(V, pol_c, pol_w)`:
+- `V`: The value function array of shape `(length(W_grid), length.(Z_grids)..., M + 1)`.
+- `pol_c`: The optimal consumption policy array of shape `(length(W_grid), length.(Z_grids)..., M)`.
+- `pol_w`: The optimal portfolio policy array of shape `(length(W_grid), length.(Z_grids)..., M)`.
 """
 function solve_dynamic_program(
     solver::BruteForceSolver,
@@ -181,9 +226,9 @@ function solve_dynamic_program(
         V[idx, M+1] = u(C_terminal)
     end
 
-    println("Starting backwards recursion from step $M down to 1...")
+    println("Starting backwards recursion from step \$M down to 1...")
     for n in M:-1:1
-        println("  Solving timestep: $n")
+        println("  Solving timestep: \$n")
 
         V_next_data = selectdim(V, ndims(V), n + 1)
         V_next_interp = linear_interpolation(
@@ -229,9 +274,9 @@ function solve_dynamic_program(
         V[idx, M+1] = u(actual_wealth)
     end
 
-    println("Starting backwards recursion from step $M down to 1...")
+    println("Starting backwards recursion from step \$M down to 1...")
     for n in M:-1:1
-        println("  Solving timestep: $n")
+        println("  Solving timestep: \$n")
 
         V_next_data = selectdim(V, ndims(V), n + 1)
         V_next_interp = linear_interpolation(
