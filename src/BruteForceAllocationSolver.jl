@@ -9,6 +9,7 @@ using Statistics
 using CairoMakie
 using StaticArrays
 using Optim
+using NLSolversBase
 
 # Export the core solver
 export AbstractAllocationSolver, BruteForceSolver

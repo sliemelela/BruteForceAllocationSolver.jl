@@ -1,6 +1,3 @@
-using Optim
-using NLSolversBase
-
 """
     evaluate_bellman_objective(
         W_n::Float64, c_n::Float64, ω_n,
