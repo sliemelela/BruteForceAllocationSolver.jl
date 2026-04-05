@@ -226,9 +226,9 @@ function solve_dynamic_program(
         V[idx, M+1] = u(C_terminal)
     end
 
-    println("Starting backwards recursion from step \$M down to 1...")
+    println("Starting backwards recursion from step $M down to 1...")
     for n in M:-1:1
-        println("  Solving timestep: \$n")
+        println("  Solving timestep: $n")
 
         V_next_data = selectdim(V, ndims(V), n + 1)
         V_next_interp = linear_interpolation(
@@ -274,9 +274,9 @@ function solve_dynamic_program(
         V[idx, M+1] = u(actual_wealth)
     end
 
-    println("Starting backwards recursion from step \$M down to 1...")
+    println("Starting backwards recursion from step $M down to 1...")
     for n in M:-1:1
-        println("  Solving timestep: \$n")
+        println("  Solving timestep: $n")
 
         V_next_data = selectdim(V, ndims(V), n + 1)
         V_next_interp = linear_interpolation(
