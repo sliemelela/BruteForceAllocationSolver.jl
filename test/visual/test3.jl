@@ -4,6 +4,7 @@ using FastGaussQuadrature
 using LinearAlgebra
 using Statistics
 using Interpolations
+using StaticArrays
 
 println("Setting up Problem 3 (Incomplete Market) Numerical Solver...")
 
@@ -41,10 +42,10 @@ Z_grids = [
 ]
 
 # Portfolio weights: ω = [ω_N, ω_S] (NO Inflation-Linked Bond)
-omega_space = Vector{Float64}[]
+omega_space = SVector{2, Float64}[]
 for w_N in range(0.0, 4.0, length=51)     # Expanded to allow heavier borrowing/leveraging
     for w_S in range(0.0, 1.5, length=51)
-        push!(omega_space, [w_N, w_S])
+        push!(omega_space, SVector(w_N, w_S))
     end
 end
 
@@ -61,14 +62,14 @@ function make_problem3_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ
     var_N = vol_N_r^2
     var_S = σ_S^2
 
-    return function(Z::Vector{Float64}, ε::Vector{Float64})
+    return function(Z, ε) # <--- UPDATED: Removed ::Vector type strictness
         r_n, π_n = Z[1], Z[2]
         ε_r, ε_π, ε_S = ε[1], ε[2], ε[3]
 
         # 1. State Transitions (Clamped to prevent explosion outside grid)
         r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.02, 0.06)
         π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06, 0.10)
-        Z_next = [r_next, π_next]
+        Z_next = SVector(r_next, π_next)
 
         # 2. Asset Returns (Nominal Bond and Stock only)
         Rf_nom = exp(r_n * dt)
@@ -80,7 +81,7 @@ function make_problem3_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ
         R_S = exp((drift_S - 0.5 * var_S) * dt + σ_S * sqrt(dt) * ε_S)
 
         # 3. Excess Returns and Base Real Return
-        Re = [R_N - Rf_nom, R_S - Rf_nom]
+        Re = SVector(R_N - Rf_nom, R_S - Rf_nom)
         R_base_real = exp((r_n - π_n) * dt)
 
         return Z_next, Re, R_base_real
@@ -107,6 +108,7 @@ crra_ex = make_crra_extrapolator(F_grid[1], F_grid[end], γ)
 
 println("Solving Dynamic Program (Pure Terminal Wealth, Unspanned Income)...")
 V, pol_w = solve_dynamic_program(
+    BruteForceSolver(),
     F_grid, Z_grids, omega_space,
     ε_nodes, W_weights, transition_prob3,
     M, u, identity, problem3_budget_constraint, crra_ex
