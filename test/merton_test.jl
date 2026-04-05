@@ -1,3 +1,5 @@
+using Optim
+
 @testset "Merton Benchmark Test" begin
 
     # Define amount of timesteps, stepsize etc.
@@ -33,22 +35,36 @@
     # Inject the extrapolator
     crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
-    # Run the solver
-    V, pol_c, pol_w = solve_dynamic_program(
+    # Define solvers to test (using lighter parameters for Zooming to keep tests fast)
+    solvers = [
         BruteForceSolver(),
-        W_grid, Z_grids, c_grid, omega_space,
-        ε_nodes, W_weights, merton_transition,
-        M, β, u, fractional_consumption,
-        standard_budget_constraint, crra_extrapolator
-    )
+        ZoomingSolver(iterations=2, points_per_dim=7, zoom_range_factor=1.5),
+        OptimSolver(method=LBFGS(), use_gradients=true)
+    ]
 
-    # Find analytical solution
     analytical_w = (μ - r) / (γ * σ^2) # 0.25
 
-    # Check if the middle of the grid matches the analytical solution
-    for W_idx in range(1, G_w), n in range(1, M)
-        numerical_w = pol_w[W_idx, n][1]
-        @test isapprox(numerical_w, analytical_w, atol=0.02)
+    for solver in solvers
+        @testset "$(typeof(solver))" begin
+            # Run the solver
+            V, pol_c, pol_w = solve_dynamic_program(
+                solver,
+                W_grid, Z_grids, c_grid, omega_space,
+                ε_nodes, W_weights, merton_transition,
+                M, β, u, fractional_consumption,
+                standard_budget_constraint, crra_extrapolator
+            )
+
+            # Check if the grid matches the analytical solution
+            for W_idx in range(1, G_w), n in range(1, M)
+                numerical_w = pol_w[W_idx, n][1]
+
+                # The continuous solvers may achieve much higher precision than
+                # the 0.01 step size of the brute force coarse grid, but we keep
+                # the standard tolerance check to ensure baseline economic validity.
+                @test isapprox(numerical_w, analytical_w, atol=0.02)
+            end
+        end
     end
 end
 
@@ -77,20 +93,30 @@ end
     # 5. Inject the Log-Space Strategies
     log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
 
-    # 6. Run the solver!
-    V, pol_c, pol_w = solve_dynamic_program(
+    solvers = [
         BruteForceSolver(),
-        X_grid, Z_grids, c_grid, omega_space,
-        ε_nodes, X_weights, merton_transition,
-        M, β, u, log_fractional_consumption,
-        log_budget_constraint, log_extrapolator
-    )
+        ZoomingSolver(iterations=2, points_per_dim=7, zoom_range_factor=1.5),
+        OptimSolver(method=LBFGS(), use_gradients=true)
+    ]
 
-    # 7. Validate
     analytical_w = (0.07 - 0.02) / (5.0 * 0.20^2) # 0.25
 
-    for X_idx in range(1, G_X), n in range(1, M)
-        numerical_w = pol_w[X_idx, n][1]
-        @test isapprox(numerical_w, analytical_w, atol=0.02)
+    for solver in solvers
+        @testset "$(typeof(solver))" begin
+            # 6. Run the solver!
+            V, pol_c, pol_w = solve_dynamic_program(
+                solver,
+                X_grid, Z_grids, c_grid, omega_space,
+                ε_nodes, X_weights, merton_transition,
+                M, β, u, log_fractional_consumption,
+                log_budget_constraint, log_extrapolator
+            )
+
+            # 7. Validate
+            for X_idx in range(1, G_X), n in range(1, M)
+                numerical_w = pol_w[X_idx, n][1]
+                @test isapprox(numerical_w, analytical_w, atol=0.02)
+            end
+        end
     end
 end
