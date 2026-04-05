@@ -62,7 +62,7 @@ Z_grids = [
 # Expand the boundaries and increase the density
 omega_space = Vector{Float64}[]
 for w_N in range(-3.0, 5.0, length=31)   # Nominal bond from -300% to 500%
-    for w_S in range(-1.0, 2.5, length=31) # Stock from 0% to 150%
+    for w_S in range(-1.0, 2.5, length=41) # Stock from 0% to 150%
         push!(omega_space, [w_N, w_S])
     end
 end

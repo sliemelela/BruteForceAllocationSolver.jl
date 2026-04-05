@@ -120,14 +120,14 @@ println("\nGenerating Analytical Closed-Form Plots...")
 
 # Equation (53): Analytical Value Function
 function eq53_value_function(t, W, r, pi_val)
-    h = T - t
+    h = τ_N
     exponent = (γ - 1.0) * (E2(h) + γ_tilde * V2(h) - B_r(h)*r + B_π(h)*pi_val)
     return (W^(1 - γ)) / (1 - γ) * exp(exponent)
 end
 
 # Equation (55): Analytical Certainty Equivalent
 function eq55_certainty_equivalent(t, W, r, pi_val)
-    h = T - t
+    h = τ_N
     exponent = B_r(h)*r - B_π(h)*pi_val - E2(h) - γ_tilde * V2(h)
     return W * exp(exponent)
 end
@@ -161,7 +161,7 @@ end
 
 # Equation (36): Optimal Portfolio WITHOUT Human Capital
 function eq36_optimal_weights_no_hc(t)
-    h = T - t
+    h = τ_N
     if h < 1e-8 return 0.0, 0.0, 0.0 end
 
     wN = (B_r(h) * σ_r * phi_vec[2] + B_π(h) * σ_π * phi_vec[1]) / (B_r(h) * B_π(h) * σ_r * σ_π)
@@ -172,7 +172,7 @@ end
 
 # Equation (37): Optimal Portfolio WITH Human Capital
 function eq37_optimal_weights_with_hc(t, F, r, pi_val)
-    h = T - t
+    h = τ_N
     if h < 1e-8 return 0.0, 0.0, 0.0 end
 
     wN_tilde, wI_tilde, wS_tilde = eq36_optimal_weights_no_hc(t)
@@ -210,6 +210,8 @@ ce_heat = [eq55_certainty_equivalent(t_fix, fixed_W_ana, r, pi) for r in ana_r_g
 Dr_heat = [eq143_durations(t_fix, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
 Dpi_heat = [eq143_durations(t_fix, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
 wN_no_hc_heat = [eq36_optimal_weights_no_hc(t_fix)[1] for r in ana_r_grid, pi in ana_pi_grid]
+wI_no_hc_heat = [eq36_optimal_weights_no_hc(t_fix)[2] for r in ana_r_grid, pi in ana_pi_grid]
+wS_no_hc_heat = [eq36_optimal_weights_no_hc(t_fix)[3] for r in ana_r_grid, pi in ana_pi_grid]
 wN_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[1] for r in ana_r_grid, pi in ana_pi_grid]
 wI_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[2] for r in ana_r_grid, pi in ana_pi_grid]
 wS_hc_heat = [eq37_optimal_weights_with_hc(t_fix, F_0, r, pi)[3] for r in ana_r_grid, pi in ana_pi_grid]
@@ -226,6 +228,14 @@ save("analytical_eq55_ce_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, ce_
 save("analytical_eq143_Dr_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, Dr_heat; title="Eq 143: D^r Sensitivity (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="D^r"))
 save("analytical_eq143_Dpi_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, Dpi_heat; title="Eq 143: D^π Sensitivity (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="D^π"))
 save("analytical_eq36_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_no_hc_heat; title="Eq 36: Nominal Bond WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq36_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_no_hc_heat;
+     title="Eq 36: Nominal Bond WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+
+save("analytical_eq36_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_no_hc_heat;
+     title="Eq 36: ILB WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+
+save("analytical_eq36_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_no_hc_heat;
+     title="Eq 36: Stock WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 save("analytical_eq37_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat; title="Eq 37: Nominal Bond WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 save("analytical_eq37_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat; title="Eq 37: ILB WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 save("analytical_eq37_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat; title="Eq 37: Stock WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
@@ -261,15 +271,15 @@ G_w = 150
 W_grid = generate_log_spaced_grid(10.0, 300.0, G_w)
 
 Z_grids = [
-    generate_linear_grid(-0.02, 0.06, 5),  # r_grid
-    generate_linear_grid(-0.06, 0.10, 5)   # π_grid
+    generate_linear_grid(-0.02, 0.06, 10),  # r_grid
+    generate_linear_grid(-0.02, 0.06, 10)   # π_grid
 ]
 
 # Tighter, higher-resolution portfolio bounds
 omega_space = Vector{Float64}[]
-for w_N in range(-1.0, 6.0, length=21)
-    for w_I in range(-0.5, 1.0, length=21)
-        for w_S in range(-0.5, 3.0, length=21)
+for w_N in range(0.0, 6.0, length=21)
+    for w_I in range(0.0, 1.0, length=21)
+        for w_S in range(0.0, 3.0, length=21)
             push!(omega_space, [w_N, w_I, w_S])
         end
     end
@@ -419,14 +429,19 @@ wN_sim, wI_sim, wS_sim = extract_controls_prob1(world_1.paths.W, world_1.paths.r
 # ==============================================================================
 println("Calculating transformed w* weights...")
 
-function get_HC_and_durations(t, r_val, pi_val)
+# 1. Helper to calculate Human Capital Durations (Updated for fractional dt)
+function get_HC_and_durations(t_step, r_val, pi_val)
     H_t = 0.0
     D_r_num = 0.0
     D_pi_num = 0.0
 
-    for step in Int(t+1):M
+    t = (t_step - 1) * dt # Current physical time
+
+    # Loop over future integer steps directly
+    for step in t_step:M
         s = step * dt
         h = s - t
+        # A_I, B_r, and B_π are already defined in your Analytical Baseline section
         P_real = exp(A_I(h) - B_r(h)*r_val + B_π(h)*pi_val)
         income = 1.0 * dt
 
@@ -439,25 +454,30 @@ function get_HC_and_durations(t, r_val, pi_val)
     return D_r_num / H_t, D_pi_num / H_t, H_t
 end
 
+# 2. Function to transform numerical interpolators into w*
 function get_numerical_w_star(t_step, F_val, r_val, pi_val)
     t = (t_step - 1) * dt
     h = T - t
     if h < 1e-8 return 0.0, 0.0, 0.0 end
 
-    D_r, D_pi, H_t = get_HC_and_durations(t, r_val, pi_val)
+    # Pass the integer t_step directly
+    D_r, D_pi, H_t = get_HC_and_durations(t_step, r_val, pi_val)
+
+    # Implied Total Wealth
     W_t = F_val + H_t
 
+    # Get Numerical Tilde Weights (from DP interpolation)
     wN_tilde = interp_w[t_step][1](W_t, r_val, pi_val)
     wI_tilde = interp_w[t_step][2](W_t, r_val, pi_val)
     wS_tilde = interp_w[t_step][3](W_t, r_val, pi_val)
 
+    # Apply Equation 37
     wN_star = (W_t / F_val) * wN_tilde + (H_t / F_val) * (D_pi / B_π(h) - D_r / B_r(h))
     wI_star = (W_t / F_val) * wI_tilde - (H_t / F_val) * (D_pi / B_π(h))
     wS_star = (W_t / F_val) * wS_tilde
 
     return wN_star, wI_star, wS_star
 end
-
 
 # ==============================================================================
 # 8. Generating Numerical DP Plots

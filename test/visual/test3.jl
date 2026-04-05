@@ -1,4 +1,5 @@
 using BruteForceAllocationSolver
+using FinancialMarketSimulation
 using FastGaussQuadrature
 using LinearAlgebra
 using Statistics
@@ -35,14 +36,14 @@ G_f = 150
 F_grid = generate_log_spaced_grid(10.0, 300.0, G_f)
 
 Z_grids = [
-    generate_linear_grid(-0.02, 0.06, 5),  # r_grid
-    generate_linear_grid(-0.06, 0.10, 5)   # π_grid
+    generate_linear_grid(-0.02, 0.06, 10),  # r_grid
+    generate_linear_grid(-0.02, 0.06, 10)   # π_grid
 ]
 
 # Portfolio weights: ω = [ω_N, ω_S] (NO Inflation-Linked Bond)
 omega_space = Vector{Float64}[]
-for w_N in range(-2.0, 4.0, length=21)     # Expanded to allow heavier borrowing/leveraging
-    for w_S in range(0.0, 1.5, length=11)
+for w_N in range(0.0, 4.0, length=51)     # Expanded to allow heavier borrowing/leveraging
+    for w_S in range(0.0, 1.5, length=51)
         push!(omega_space, [w_N, w_S])
     end
 end
