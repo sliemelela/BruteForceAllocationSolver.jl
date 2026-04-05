@@ -1,161 +1,71 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial · BruteForceAllocationSolver.jl</title><meta name="title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta property="og:title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta property="twitter:title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta name="description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="og:description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="twitter:description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="og:url" content="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><meta property="twitter:url" content="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><link rel="canonical" href="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">BruteForceAllocationSolver.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../theory/">Theory (Background)</a></li><li class="is-active"><a class="tocitem" href>Tutorial</a><ul class="internal"><li><a class="tocitem" href="#Example-1:-The-Terminal-Wealth-Merton-Problem"><span>Example 1: The Terminal Wealth Merton Problem</span></a></li><li><a class="tocitem" href="#Example-2:-Working-in-Log-Wealth-Space"><span>Example 2: Working in Log-Wealth Space</span></a></li><li><a class="tocitem" href="#Example-3:-Adding-Auxiliary-State-Variables-(Z)"><span>Example 3: Adding Auxiliary State Variables (<span>$Z$</span>)</span></a></li><li><a class="tocitem" href="#Example-4:-Solving-with-Intermediate-Consumption"><span>Example 4: Solving with Intermediate Consumption</span></a></li><li><a class="tocitem" href="#Example-5:-Calculating-the-Certainty-Equivalent"><span>Example 5: Calculating the Certainty Equivalent</span></a></li></ul></li><li><a class="tocitem" href="../test/">Tests</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/sliemelela/BruteForceAllocationSolver.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorial:-Getting-Started"><a class="docs-heading-anchor" href="#Tutorial:-Getting-Started">Tutorial: Getting Started</a><a id="Tutorial:-Getting-Started-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial:-Getting-Started" title="Permalink"></a></h1><p>Welcome to the <code>BruteForceAllocationSolver.jl</code> tutorial!</p><p>This package solves discrete-time and continuous-time consumption-portfolio choice problems using Bellman backwards recursion and Gauss-Hermite quadrature.</p><p>A core feature of this package is its <strong>&quot;Agnostic Engine.&quot;</strong> The solver does not hardcode budget constraints, consumption rules, or boundary extrapolations. Instead, it relies on the <strong>Strategy Pattern</strong>—you inject the economic rules into the solver, allowing you to easily switch between absolute wealth spaces, log-wealth spaces, and complex non-tradeable income models.</p><p>Thanks to Julia&#39;s multiple dispatch, the solver can elegantly handle both problems with <strong>intermediate consumption</strong>, as well as <strong>pure Terminal Wealth problems</strong>, seamlessly adapting its performance and API based on the arguments you provide.</p><p>Let&#39;s walk through two Terminal Wealth examples to see this in action.</p><h2 id="Example-1:-The-Terminal-Wealth-Merton-Problem"><a class="docs-heading-anchor" href="#Example-1:-The-Terminal-Wealth-Merton-Problem">Example 1: The Terminal Wealth Merton Problem</a><a id="Example-1:-The-Terminal-Wealth-Merton-Problem-1"></a><a class="docs-heading-anchor-permalink" href="#Example-1:-The-Terminal-Wealth-Merton-Problem" title="Permalink"></a></h2><p>In this classic problem, an investor allocates their wealth between a risk-free asset and a single risky asset following Geometric Brownian Motion. Because we are only interested in maximizing the utility of wealth at the terminal date <span>$T$</span>, there is no intermediate consumption and no subjective discount factor <span>$\beta$</span>.</p><h3 id="1.-Setup-Parameters-and-Grids"><a class="docs-heading-anchor" href="#1.-Setup-Parameters-and-Grids">1. Setup Parameters and Grids</a><a id="1.-Setup-Parameters-and-Grids-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Setup-Parameters-and-Grids" title="Permalink"></a></h3><p>First, we define our economic parameters and generate the grids for our state and control variables. Notice we use <code>StaticArrays</code> to ensure the core engine runs with zero memory allocations.</p><pre><code class="language-julia hljs">using BruteForceAllocationSolver
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial · BruteForceAllocationSolver.jl</title><meta name="title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta property="og:title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta property="twitter:title" content="Tutorial · BruteForceAllocationSolver.jl"/><meta name="description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="og:description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="twitter:description" content="Documentation for BruteForceAllocationSolver.jl."/><meta property="og:url" content="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><meta property="twitter:url" content="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><link rel="canonical" href="https://sliemelela.github.io/BruteForceAllocationSolver.jl/tutorial/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">BruteForceAllocationSolver.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../theory/">Theory (Background)</a></li><li class="is-active"><a class="tocitem" href>Tutorial</a><ul class="internal"><li><a class="tocitem" href="#1.-Choosing-a-Solver-Strategy"><span>1. Choosing a Solver Strategy</span></a></li><li><a class="tocitem" href="#Example-1:-The-Terminal-Wealth-Merton-Problem"><span>Example 1: The Terminal Wealth Merton Problem</span></a></li><li><a class="tocitem" href="#Example-2:-Using-the-Continuous-OptimSolver"><span>Example 2: Using the Continuous <code>OptimSolver</code></span></a></li><li><a class="tocitem" href="#Example-3:-Working-in-Log-Wealth-Space"><span>Example 3: Working in Log-Wealth Space</span></a></li><li><a class="tocitem" href="#Example-4:-Intermediate-Consumption"><span>Example 4: Intermediate Consumption</span></a></li><li><a class="tocitem" href="#Example-5:-Certainty-Equivalent-(CE)"><span>Example 5: Certainty Equivalent (CE)</span></a></li></ul></li><li><a class="tocitem" href="../test/">Tests</a></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/sliemelela/BruteForceAllocationSolver.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorial:-Getting-Started"><a class="docs-heading-anchor" href="#Tutorial:-Getting-Started">Tutorial: Getting Started</a><a id="Tutorial:-Getting-Started-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial:-Getting-Started" title="Permalink"></a></h1><p>Welcome to the <code>BruteForceAllocationSolver.jl</code> tutorial!</p><p>This package solves discrete-time and continuous-time consumption-portfolio choice problems using Bellman backwards recursion and Gauss-Hermite quadrature.</p><p>A core feature of this package is its <strong>&quot;Agnostic Engine.&quot;</strong> The solver does not hardcode budget constraints, consumption rules, or boundary extrapolations. Instead, it relies on the <strong>Strategy Pattern</strong>—you inject the economic rules into the solver, allowing you to easily switch between absolute wealth spaces, log-wealth spaces, and complex non-tradeable income models.</p><hr/><h2 id="1.-Choosing-a-Solver-Strategy"><a class="docs-heading-anchor" href="#1.-Choosing-a-Solver-Strategy">1. Choosing a Solver Strategy</a><a id="1.-Choosing-a-Solver-Strategy-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Choosing-a-Solver-Strategy" title="Permalink"></a></h2><p>The package provides three distinct algorithms for finding the optimal controls (<span>$c$</span> and <span>$\omega$</span>) at each grid point. You select these by passing a specific solver struct to the <code>solve_dynamic_program</code> function.</p><table><tr><th style="text-align: left">Solver</th><th style="text-align: left">Method</th><th style="text-align: left">Best For...</th></tr><tr><td style="text-align: left"><strong><code>BruteForceSolver</code></strong></td><td style="text-align: left">Exhaustive Grid Search</td><td style="text-align: left">Robustness; guaranteed</td></tr><tr><td style="text-align: left">to find the best point on your defined grid.</td><td style="text-align: left"></td><td style="text-align: left"></td></tr><tr><td style="text-align: left"><strong><code>ZoomingSolver</code></strong></td><td style="text-align: left">Iterative Refinement</td><td style="text-align: left">Speed; performs a coarse</td></tr><tr><td style="text-align: left">sweep and then &quot;zooms in&quot; on the peak.</td><td style="text-align: left"></td><td style="text-align: left"></td></tr><tr><td style="text-align: left"><strong><code>OptimSolver</code></strong></td><td style="text-align: left">Continuous Optimization</td><td style="text-align: left">Precision; uses <code>Optim.jl</code></td></tr><tr><td style="text-align: left">(L-BFGS) to find exact optima between grid points.</td><td style="text-align: left"></td><td style="text-align: left"></td></tr></table><h3 id="The-OptimSolver-and-Agnostic-Scaling"><a class="docs-heading-anchor" href="#The-OptimSolver-and-Agnostic-Scaling">The <code>OptimSolver</code> and Agnostic Scaling</a><a id="The-OptimSolver-and-Agnostic-Scaling-1"></a><a class="docs-heading-anchor-permalink" href="#The-OptimSolver-and-Agnostic-Scaling" title="Permalink"></a></h3><p>Continuous optimizers often struggle with economic utility functions because the values can become microscopically small (e.g., <span>$10^{-8}$</span>), causing the solver to think the surface is &quot;flat&quot; and stop early.</p><p>The <code>OptimSolver</code> in this package automatically applies <strong>Agnostic Scaling</strong>: it evaluates your warm-start guess and divides the entire objective function by that magnitude. This &quot;stretches&quot; the mountain so the optimizer can always see the slope, regardless of whether you are using CRRA, CARA, or Epstein-Zin utility.</p><hr/><h2 id="Example-1:-The-Terminal-Wealth-Merton-Problem"><a class="docs-heading-anchor" href="#Example-1:-The-Terminal-Wealth-Merton-Problem">Example 1: The Terminal Wealth Merton Problem</a><a id="Example-1:-The-Terminal-Wealth-Merton-Problem-1"></a><a class="docs-heading-anchor-permalink" href="#Example-1:-The-Terminal-Wealth-Merton-Problem" title="Permalink"></a></h2><p>In this classic problem, an investor allocates wealth between a risk-free asset and a single risky asset. We maximize utility at terminal date <span>$T$</span>.</p><h3 id="1.-Setup-Parameters-and-Grids"><a class="docs-heading-anchor" href="#1.-Setup-Parameters-and-Grids">1. Setup Parameters and Grids</a><a id="1.-Setup-Parameters-and-Grids-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Setup-Parameters-and-Grids" title="Permalink"></a></h3><pre><code class="language-julia hljs">using BruteForceAllocationSolver
 using StaticArrays
 
 # Define Model Parameters
 M = 10           # Number of timesteps
 dt = 1.0         # Step size (years)
 γ = 5.0          # Coefficient of relative risk aversion
-
-# Pure CRRA Utility evaluated on terminal physical wealth
 u(W) = (W^(1 - γ)) / (1 - γ)
 
 # Setup Grids
-G_w = 200        # Number of wealth grid points
-W_min = 1.0
-W_max = 100.0
-
-# Generate an exponentially spaced grid to capture high curvature near zero
-W_grid = generate_log_spaced_grid(W_min, W_max, G_w)
-Z_grids = Vector{Float64}[] # No auxiliary state variables in this model
-
-# Control grid: Portfolio weight. Notice we do NOT define a consumption grid!
-# We use SVector to guarantee allocation-free performance in the inner loop.
-omega_space = [SVector(w) for w in generate_linear_grid(0.0, 1.0, 101)]</code></pre><h3 id="2.-Integration-Nodes"><a class="docs-heading-anchor" href="#2.-Integration-Nodes">2. Integration Nodes</a><a id="2.-Integration-Nodes-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Integration-Nodes" title="Permalink"></a></h3><p>Because the financial returns are driven by normally distributed shocks, we use Gauss-Hermite quadrature to evaluate the Bellman expectation accurately. The package provides a convenient built-in generator for multidimensional correlated shocks.</p><pre><code class="language-julia hljs"># Setup 1D Quadrature Nodes for the single risky asset
-ρ_mat = fill(1.0, 1, 1) # 1x1 correlation matrix
-ε_nodes, W_weights = generate_gaussian_shocks(1, 10, ρ_mat)</code></pre><h3 id="3.-Injecting-the-Strategies-and-Solving"><a class="docs-heading-anchor" href="#3.-Injecting-the-Strategies-and-Solving">3. Injecting the Strategies and Solving</a><a id="3.-Injecting-the-Strategies-and-Solving-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Injecting-the-Strategies-and-Solving" title="Permalink"></a></h3><p>Now we inject the economic rules. Because we are solving a Terminal Wealth problem, we omit the <code>c_grid</code>, <code>compute_consumption</code>, and <code>β</code> arguments.</p><p>Crucially, we pass <code>identity</code> as the <code>state_to_wealth</code> strategy. This simply tells the solver that the values in our <code>W_grid</code> already represent absolute physical wealth before they are passed into the utility function.</p><pre><code class="language-julia hljs"># Define Market Dynamics and Strategies
-r = 0.02
-μ = 0.07
-σ = 0.20
-
-# Create the closures using the built-in factories
+W_grid = generate_log_spaced_grid(1.0, 100.0, 200)
+Z_grids = Vector{Float64}[] # No auxiliary state variables
+omega_space = [SVector(ω) for ω in generate_linear_grid(0.0, 1.0, 101)]</code></pre><h3 id="2.-Integration-Nodes"><a class="docs-heading-anchor" href="#2.-Integration-Nodes">2. Integration Nodes</a><a id="2.-Integration-Nodes-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Integration-Nodes" title="Permalink"></a></h3><p>We use Gauss-Hermite quadrature to evaluate the Bellman expectation.</p><pre><code class="language-julia hljs">ρ_mat = fill(1.0, 1, 1)
+ε_nodes, W_weights = generate_gaussian_shocks(1, 10, ρ_mat)</code></pre><h3 id="3.-Injecting-Strategies-and-Solving"><a class="docs-heading-anchor" href="#3.-Injecting-Strategies-and-Solving">3. Injecting Strategies and Solving</a><a id="3.-Injecting-Strategies-and-Solving-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Injecting-Strategies-and-Solving" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Define Market Dynamics
+r, μ, σ = 0.02, 0.07, 0.20
 merton_transition = make_merton_transition(r, μ, σ, dt)
 crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
-# Run the Solver!
+# Run the Solver using BruteForce
 V, pol_w = solve_dynamic_program(
-    BruteForceSolver(),           # Strategy: The solving algorithm to use
+    BruteForceSolver(),
     W_grid, Z_grids, omega_space,
     ε_nodes, W_weights, merton_transition,
-    M, u,
-    identity,                     # Strategy: W_grid is physical wealth
-    standard_budget_constraint,   # Strategy: multiplicative wealth evolution
-    crra_extrapolator             # Strategy: CRRA asymptotic boundaries
+    M, u, identity, standard_budget_constraint, crra_extrapolator
+)</code></pre><hr/><h2 id="Example-2:-Using-the-Continuous-OptimSolver"><a class="docs-heading-anchor" href="#Example-2:-Using-the-Continuous-OptimSolver">Example 2: Using the Continuous <code>OptimSolver</code></a><a id="Example-2:-Using-the-Continuous-OptimSolver-1"></a><a class="docs-heading-anchor-permalink" href="#Example-2:-Using-the-Continuous-OptimSolver" title="Permalink"></a></h2><p>If you need higher precision than a fixed grid allows, use the <code>OptimSolver</code>.</p><pre><code class="language-julia hljs">using Optim
+
+# Define transformation functions for Parameter Mapping
+# Initialize the continuous solver
+continuous_solver = OptimSolver(
+    method = LBFGS(),
+    use_gradients = true
 )
 
-# Validate against the analytical continuous-time solution
-analytical_w = (μ - r) / (γ * σ^2) # ≈ 0.25
-println(&quot;Numerical Portfolio Share: &quot;, round(pol_w[100, 1][1], digits=4))
-println(&quot;Analytical Merton Share: &quot;, round(analytical_w, digits=4))</code></pre><h2 id="Example-2:-Working-in-Log-Wealth-Space"><a class="docs-heading-anchor" href="#Example-2:-Working-in-Log-Wealth-Space">Example 2: Working in Log-Wealth Space</a><a id="Example-2:-Working-in-Log-Wealth-Space-1"></a><a class="docs-heading-anchor-permalink" href="#Example-2:-Working-in-Log-Wealth-Space" title="Permalink"></a></h2><p>Because the value function is highly curved, working in absolute wealth levels can require a massive grid to maintain accuracy. Alternatively, you can formulate your state variable as <span>$X = \log(W)$</span>.</p><p>Because of the <strong>Strategy Pattern</strong> architecture, we don&#39;t have to rewrite the Bellman recursion engine to do this. We simply swap out the injected rules to handle log-space mathematics.</p><pre><code class="language-julia hljs"># Define a standard linear grid for Log-Wealth (X)
-# log(0.01) ≈ -4.6, log(100.0) ≈ 4.6
-G_X = 200
-X_grid = generate_linear_grid(log(0.01), log(100.0), G_X)
-
-# Setup the Log-Space Boundary Strategy
+# Solve with the exact same API
+V_opt, pol_w_opt = solve_dynamic_program(
+    continuous_solver,
+    W_grid, Z_grids, omega_space,
+    ε_nodes, W_weights, merton_transition,
+    M, u, identity, standard_budget_constraint, crra_extrapolator
+)</code></pre><hr/><h2 id="Example-3:-Working-in-Log-Wealth-Space"><a class="docs-heading-anchor" href="#Example-3:-Working-in-Log-Wealth-Space">Example 3: Working in Log-Wealth Space</a><a id="Example-3:-Working-in-Log-Wealth-Space-1"></a><a class="docs-heading-anchor-permalink" href="#Example-3:-Working-in-Log-Wealth-Space" title="Permalink"></a></h2><p>Formulating states as <span>$X = \log(W)$</span> captures high curvature near zero more efficiently. Swap the strategies to handle log-math.</p><pre><code class="language-julia hljs">X_grid = generate_linear_grid(log(0.01), log(100.0), 200)
 log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
 
-# Run the solver with the new injected strategies!
-# Notice we pass the built-in `exp` function to tell the solver how to
-# un-log the state variable before passing it into the utility function u(W).
 V_log, pol_w_log = solve_dynamic_program(
     BruteForceSolver(),
     X_grid, Z_grids, omega_space,
     ε_nodes, W_weights, merton_transition,
     M, u,
-    exp,                          # Strategy: X_grid is log-wealth, un-log it
+    exp,                          # Strategy: un-log state for utility u(W)
     log_budget_constraint,        # Strategy: Additive log-wealth evolution
-    log_extrapolator              # Strategy: Stitches CRRA curves to bounds
-)
+    log_extrapolator
+)</code></pre><hr/><h2 id="Example-4:-Intermediate-Consumption"><a class="docs-heading-anchor" href="#Example-4:-Intermediate-Consumption">Example 4: Intermediate Consumption</a><a id="Example-4:-Intermediate-Consumption-1"></a><a class="docs-heading-anchor-permalink" href="#Example-4:-Intermediate-Consumption" title="Permalink"></a></h2><p>For agents drawing utility from consumption over time, introduce <code>β</code> and a <code>c_grid</code>.</p><pre><code class="language-julia hljs">β = 0.96
+c_grid = generate_linear_grid(0.01, 0.99, 50)
 
-println(&quot;Log-Space Numerical Share: &quot;, round(pol_w_log[100, 1][1], digits=4))</code></pre><h2 id="Example-3:-Adding-Auxiliary-State-Variables-(Z)"><a class="docs-heading-anchor" href="#Example-3:-Adding-Auxiliary-State-Variables-(Z)">Example 3: Adding Auxiliary State Variables (<span>$Z$</span>)</a><a id="Example-3:-Adding-Auxiliary-State-Variables-(Z)-1"></a><a class="docs-heading-anchor-permalink" href="#Example-3:-Adding-Auxiliary-State-Variables-(Z)" title="Permalink"></a></h2><p>Real-world problems rarely have a constant investment opportunity set. Variables like interest rates, dividend yields, or inflation often fluctuate over time. The <code>BruteForceAllocationSolver</code> handles an arbitrary number of auxiliary state variables natively.</p><p>To add state variables, you simply populate the <code>Z_grids</code> array and update your integration nodes to handle the higher-dimensional shocks.</p><pre><code class="language-julia hljs"># 1. Define the auxiliary state grid (e.g., a stochastic interest rate &#39;r&#39;)
-G_r = 11
-r_grid = generate_linear_grid(0.0, 0.10, G_r)
-
-# Add as many state grids as your transition model requires!
-Z_grids = [r_grid]
-
-# 2. Setup 2D Quadrature (1 shock for the stock, 1 for the interest rate)
-ρ_val = 0.0 # Correlation between stock and rate shocks
-ρ_mat = [1.0 ρ_val;
-         ρ_val 1.0]
-
-# Automatically generates 10^2 = 100 correlated multidimensional nodes
-ε_nodes_2d, W_weights_2d = generate_gaussian_shocks(2, 10, ρ_mat)
-
-# 3. Inject a transition model that uses Z
-# Parameters: κ=0.1, θ=0.03, σ_r=0.01, λ_S=0.25, σ_S=0.20, ρ=0.0, dt=1.0
-stoch_transition = make_stochastic_r_constant_premium_transition(
-    0.1, 0.03, 0.01, 0.25, 0.20, 0.0, 1.0
-)
-
-# 4. Run the solver!
-V_stoch, pol_w_stoch = solve_dynamic_program(
-    BruteForceSolver(),
-    X_grid, Z_grids, omega_space,
-    ε_nodes_2d, W_weights_2d, stoch_transition,
-    M, u,
-    exp,                          # Strategy: X_grid is log-wealth
-    log_budget_constraint,        # Strategy: Additive evolution
-    log_extrapolator              # Strategy: CRRA boundaries
-)
-
-# The policy arrays dynamically expand to match the dimensionality of Z!
-# pol_w_stoch[Wealth_idx, Rate_idx, Time_idx]
-w_at_5_percent = pol_w_stoch[100, 6, 1][1]
-println(&quot;Optimal Risky Weight at r=5%: &quot;, round(w_at_5_percent, digits=4))</code></pre><h2 id="Example-4:-Solving-with-Intermediate-Consumption"><a class="docs-heading-anchor" href="#Example-4:-Solving-with-Intermediate-Consumption">Example 4: Solving with Intermediate Consumption</a><a id="Example-4:-Solving-with-Intermediate-Consumption-1"></a><a class="docs-heading-anchor-permalink" href="#Example-4:-Solving-with-Intermediate-Consumption" title="Permalink"></a></h2><p>If the economic agent draws utility from consuming their wealth over time rather than just hoarding it for a terminal date, the Bellman equation requires an inner maximization loop over consumption choices.</p><p>Thanks to multiple dispatch, you do not need to call a different solver. You simply introduce the subjective discount factor <code>β</code>, provide a <code>c_grid</code>, and swap the <code>state_to_wealth</code> strategy for a <code>compute_consumption</code> strategy. The package will automatically route your model to the full recursive engine.</p><pre><code class="language-julia hljs"># 1. Define the subjective discount factor
-β = 0.96
-
-# 2. Define the Consumption Control Grid (e.g., fraction of wealth)
-G_c = 50
-c_grid = generate_linear_grid(0.01, 0.99, G_c)
-
-# 3. Run the solver with the FULL signature
-# Notice we pass `c_grid`, `β`, and a `compute_consumption` strategy.
-# We drop `state_to_wealth` because utility is evaluated on consumption!
 V_cons, pol_c, pol_w_cons = solve_dynamic_program(
     BruteForceSolver(),
     W_grid, Z_grids, c_grid, omega_space,
-    ε_nodes_2d, W_weights_2d, stoch_transition,
+    ε_nodes, W_weights, merton_transition,
     M, β, u,
-    fractional_consumption,       # Strategy: Convert state &amp; &#39;c&#39; to C
-    standard_budget_constraint,   # Strategy: Multiplicative evolution
-    crra_extrapolator             # Strategy: CRRA asymptotic boundaries
-)
+    fractional_consumption,       # Strategy: c is fraction of W
+    standard_budget_constraint,
+    crra_extrapolator
+)</code></pre><hr/><h2 id="Example-5:-Certainty-Equivalent-(CE)"><a class="docs-heading-anchor" href="#Example-5:-Certainty-Equivalent-(CE)">Example 5: Certainty Equivalent (CE)</a><a id="Example-5:-Certainty-Equivalent-(CE)-1"></a><a class="docs-heading-anchor-permalink" href="#Example-5:-Certainty-Equivalent-(CE)" title="Permalink"></a></h2><p>CE translates abstract utility &quot;utils&quot; back into dollar amounts.</p><pre><code class="language-julia hljs">inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
 
-# The solver now returns THREE multidimensional arrays.
-# pol_c contains the optimal consumption choice at every grid point.
-optimal_c = pol_c[100, 6, 1]
-println(&quot;Optimal Consumption Fraction: &quot;, round(optimal_c, digits=4))</code></pre><h2 id="Example-5:-Calculating-the-Certainty-Equivalent"><a class="docs-heading-anchor" href="#Example-5:-Calculating-the-Certainty-Equivalent">Example 5: Calculating the Certainty Equivalent</a><a id="Example-5:-Calculating-the-Certainty-Equivalent-1"></a><a class="docs-heading-anchor-permalink" href="#Example-5:-Calculating-the-Certainty-Equivalent" title="Permalink"></a></h2><p>The Value Function arrays (<code>V</code>, <code>V_log</code>, <code>V_cons</code>) returned by the solver contain abstract &quot;utils,&quot; which can be mathematically difficult to interpret.</p><p>To translate these abstract numbers back into understandable &quot;dollar amounts,&quot; the package provides tools to calculate the Certainty Equivalent (CE). This is the guaranteed, risk-free amount of wealth (or constant consumption stream) that provides the exact same utility as taking the optimal risky path.</p><p>To compute it, you simply need to define the mathematical inverse of your chosen utility function and pass it into the CE functions.</p><pre><code class="language-julia hljs"># 1. Define the mathematical inverse of the CRRA utility function
-# u(x) = (x^(1-γ)) / (1-γ)
-inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+# For Terminal Wealth: guaranteed terminal amount
+ce_wealth = calculate_certainty_equivalent(V[100, 1], inv_u)
 
-# --- Terminal Wealth Problems ---
-# For problems without intermediate consumption (like Example 1),
-# use `calculate_certainty_equivalent` to find the guaranteed terminal wealth.
-target_timestep = 1
-wealth_index = 100 # Checking the middle of our W_grid
-
-abstract_utility = V[wealth_index, target_timestep]
-guaranteed_wealth = calculate_certainty_equivalent(abstract_utility, inv_u)
-
-println(&quot;Expected Utility at t=1: &quot;, round(abstract_utility, digits=4))
-println(&quot;Certainty Equivalent Terminal Wealth: &quot;, round(guaranteed_wealth, digits=2))
-
-
-# --- Intermediate Consumption Problems ---
-# For problems with consumption streams (like Example 4), we use
-# `calculate_equivalent_consumption_stream` to account for the discount factor over time.
-# This returns the constant amount you would need to consume *every single period* # to achieve the same total lifetime utility.
-
-periods_remaining = M - target_timestep + 1
-abstract_lifetime_utility = V_cons[wealth_index, 6, target_timestep] # 6 is the middle rate index
-
-constant_consumption = calculate_equivalent_consumption_stream(
-    abstract_lifetime_utility,
-    inv_u,
-    β,
-    periods_remaining
-)
-
-println(&quot;Expected Lifetime Utility at t=1: &quot;, round(abstract_lifetime_utility, digits=4))
-println(&quot;Equivalent Constant Consumption Stream: &quot;, round(constant_consumption, digits=2))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../theory/">« Theory (Background)</a><a class="docs-footer-nextpage" href="../test/">Tests »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 15:36">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+# For Consumption: guaranteed constant period-by-period stream
+periods = M - 1 + 1
+cec_stream = calculate_equivalent_consumption_stream(V_cons[100, 1],
+                                                     inv_u, β, periods)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../theory/">« Theory (Background)</a><a class="docs-footer-nextpage" href="../test/">Tests »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 20:34">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
