@@ -227,6 +227,12 @@ end
 Finds the optimal controls using continuous optimization methods via Optim.jl.
 Utilizes Fminbox to ensure boundary compliance.
 """
+"""
+    optimize_controls(solver::OptimSolver, ...)
+
+Finds the optimal controls using continuous optimization methods via Optim.jl.
+Utilizes Fminbox to ensure boundary compliance.
+"""
 function optimize_controls(
     solver::OptimSolver,
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
@@ -267,10 +273,12 @@ function optimize_controls(
     upper = vcat(maximum(c_grid), [maximum(reduce(hcat, omega_space), dims=2)...])
 
     res = if solver.use_gradients
-        optimize(obj, lower, upper, x0, Fminbox(solver.method),
-                 Optim.Options(autodiff=:forward))
+        optimize(
+            obj, lower, upper, x0, Fminbox(solver.method), Optim.Options();
+            autodiff=:forward
+        )
     else
-        optimize(obj, lower, upper, x0, Fminbox(solver.method))
+        optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     end
 
     sol = Optim.minimizer(res)
@@ -314,10 +322,12 @@ function optimize_controls(
     upper = Vector(maximum(reduce(hcat, omega_space), dims=2))
 
     res = if solver.use_gradients
-        optimize(obj, lower, upper, x0, Fminbox(solver.method),
-                 Optim.Options(autodiff=:forward))
+        optimize(
+            obj, lower, upper, x0, Fminbox(solver.method), Optim.Options();
+            autodiff=:forward
+        )
     else
-        optimize(obj, lower, upper, x0, Fminbox(solver.method))
+        optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
     end
 
     sol = Optim.minimizer(res)

@@ -12,7 +12,7 @@ using Optim
 using NLSolversBase
 
 # Export the core solver
-export AbstractAllocationSolver, BruteForceSolver
+export AbstractAllocationSolver, BruteForceSolver, ZoomingSolver, OptimSolver
 export solve_dynamic_program
 
 # Export the built-in strategies
