@@ -10,7 +10,7 @@
 
     w_bond_space = range(0.20, 0.45, length=26)
     w_stock_space = range(0.15, 0.35, length=21)
-    omega_space = vec([[wb, ws] for wb in w_bond_space, ws in w_stock_space])
+    omega_space = vec([SVector(wb, ws) for wb in w_bond_space, ws in w_stock_space])
 
     ρ_val = 0.0
     ρ_mat = [1.0 ρ_val; ρ_val 1.0]
@@ -26,6 +26,7 @@
     )
 
     _, pol_w = solve_dynamic_program(
+        BruteForceSolver(),
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_bond_stock,
         M, u, exp, log_budget_constraint, log_extrapolator # <--- Passed 'exp' here

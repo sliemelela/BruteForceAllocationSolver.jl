@@ -1,8 +1,7 @@
-
 """
     evaluate_bellman_objective(
-        W_n::Float64, Z_n::Vector{Float64}, c_n::Float64, ω_n::Vector{Float64},
-        ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+        W_n::Float64, Z_n, c_n::Float64, ω_n,
+        ε_nodes, W_weights::Vector{Float64},
         V_next, transition_model::Function, β::Float64, u::Function,
         compute_consumption::Function, budget_constraint::Function, extrapolator::Function
     )
@@ -15,10 +14,10 @@ The expectation is approximated using numerical quadrature integration over the 
 
 # Arguments
 - `W_n::Float64`: The current principal state variable (e.g., Wealth or Log-Wealth).
-- `Z_n::Vector{Float64}`: The current vector of auxiliary state variables.
+- `Z_n`: The current vector of auxiliary state variables.
 - `c_n::Float64`: The chosen consumption control (e.g., fraction of wealth or absolute amount).
-- `ω_n::Vector{Float64}`: The chosen portfolio weight vector for risky assets.
-- `ε_nodes::Vector{Vector{Float64}}`: The quadrature nodes representing standard normal shocks.
+- `ω_n`: The chosen portfolio weight vector for risky assets.
+- `ε_nodes`: The quadrature nodes representing standard normal shocks.
 - `W_weights::Vector{Float64}`: The quadrature weights corresponding to each node.
 - `V_next`: A callable multidimensional interpolation object representing the future
     value function ``V_{n+1}``.
@@ -30,17 +29,16 @@ The expectation is approximated using numerical quadrature integration over the 
     physical consumption (e.g.  `(W,c) -> c * W or (X, c) -> c * exp(X)`).
 - `budget_constraint::Function`: Strategy dictating how the main state variable transitions
     Expected signature: `(W, c, ω, R_e, R_base) -> W_next`
-    (cf. see [`standard_budget_constraint`](@ref))).
 - `extrapolator::Function`: Strategy dictating how to evaluate `V_next` when future states
-    fall outside the defined grid bounds (cf. see [`make_crra_extrapolator`](@ref)).
+    fall outside the defined grid bounds.
 
 # Returns
 - `Float64`: The total objective value for the chosen controls.
-    Evaluates to `-Inf` if the consumption rule results in zero or negative physical consumption.
+Evaluates to `-Inf` if the consumption rule results in zero or negative physical consumption.
 """
 function evaluate_bellman_objective(
-    W_n::Float64, Z_n::Vector{Float64}, c_n::Float64, ω_n::Vector{Float64},
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    W_n::Float64, Z_n, c_n::Float64, ω_n,
+    ε_nodes, W_weights::Vector{Float64},
     V_next, transition_model::Function, β::Float64, u::Function,
     compute_consumption::Function, budget_constraint::Function, extrapolator::Function
 )
@@ -53,10 +51,10 @@ function evaluate_bellman_objective(
         # 1. Market Transitions
         Z_next, R_e, R_base = transition_model(Z_n, ε_j)
 
-        # 2. Wealth Transition (Agnostic!)
+        # 2. Wealth Transition
         W_next = budget_constraint(W_n, c_n, ω_n, R_e, R_base)
 
-        # 3. Value Evaluation (Agnostic!)
+        # 3. Value Evaluation
         expected_future_value += weight * extrapolator(W_next, Z_next, V_next)
     end
 
@@ -66,8 +64,8 @@ function evaluate_bellman_objective(
 end
 
 function evaluate_bellman_objective(
-    W_n::Float64, Z_n::Vector{Float64}, ω_n::Vector{Float64},
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    W_n::Float64, Z_n, ω_n,
+    ε_nodes, W_weights::Vector{Float64},
     V_next, transition_model::Function,
     budget_constraint::Function, extrapolator::Function
 )
@@ -92,33 +90,14 @@ function evaluate_bellman_objective(
 end
 
 """
-    optimize_controls_brute_force(
-        W_n::Float64, Z_n::Vector{Float64}, c_grid::Vector{Float64}, omega_space,
-        ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
-        V_next, transition_model::Function, β::Float64, u::Function,
-        compute_consumption::Function, budget_constraint::Function, extrapolator::Function
-    )
+    optimize_controls_brute_force(...)
 
 Finds the optimal consumption and portfolio controls for a specific state `(W_n, Z_n)`
 using an exhaustive grid search.
-
-Iterates over every combination of consumption in `c_grid` and portfolio weights in `omega_space`,
-evaluates the Bellman objective, and returns the combination that maximizes the value function.
-
-# Arguments
-- `c_grid::Vector{Float64}`: The discretized 1D grid of possible consumption choices.
-- `omega_space`: An iterable collection of portfolio weight vectors.
-    *(See [`evaluate_bellman_objective`](@ref) for the remaining arguments.)*
-
-# Returns
-A 3-tuple containing:
-- `best_val::Float64`: The maximum value achieved.
-- `best_c::Float64`: The optimal consumption choice.
-- `best_ω::Vector{Float64}`: The optimal portfolio weight vector.
 """
 function optimize_controls_brute_force(
-    W_n::Float64, Z_n::Vector{Float64}, c_grid::Vector{Float64}, omega_space,
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
+    ε_nodes, W_weights::Vector{Float64},
     V_next, transition_model::Function, β::Float64, u::Function,
     compute_consumption::Function, budget_constraint::Function,
     extrapolator::Function
@@ -145,8 +124,8 @@ function optimize_controls_brute_force(
 end
 
 function optimize_controls_brute_force(
-    W_n::Float64, Z_n::Vector{Float64}, omega_space,
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    W_n::Float64, Z_n, omega_space,
+    ε_nodes, W_weights::Vector{Float64},
     V_next, transition_model::Function,
     budget_constraint::Function, extrapolator::Function
 )
@@ -171,53 +150,29 @@ end
 
 """
     solve_dynamic_program(
+        solver::BruteForceSolver,
         W_grid::Vector{Float64}, Z_grids::Vector{Vector{Float64}},
-        c_grid::Vector{Float64}, omega_space::Vector{Vector{Float64}},
-        ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+        c_grid::Vector{Float64}, omega_space,
+        ε_nodes, W_weights::Vector{Float64},
         transition_model::Function, M::Int, β::Float64, u::Function,
         compute_consumption::Function, budget_constraint::Function, extrapolator::Function
     )
 
 Solves a finite-horizon dynamic programming problem for portfolio and consumption choice
 using backwards recursion.
-
-The solver evaluates the problem over `M` time steps. It builds multidimensional linear
-interpolations of the future value function at each step and executes the state-space evaluation
-in parallel across available threads. The solver is purely agnostic and relies entirely on the
-injected strategy functions to dictate the economic structure of the model.
-
-# Arguments
-- `W_grid::Vector{Float64}`: The grid for the principal state variable (e.g., Wealth or Log-Wealth).
-- `Z_grids::Vector{Vector{Float64}}`: A list of grids for auxiliary state variables.
-- `c_grid::Vector{Float64}`: The grid of valid consumption choices.
-- `omega_space::Vector{Vector{Float64}}`: The space of valid portfolio weight vectors.
-- `ε_nodes::Vector{Vector{Float64}}`: Multidimensional quadrature nodes for the expectation integral.
-- `W_weights::Vector{Float64}`: Corresponding multidimensional quadrature weights.
-- `transition_model::Function`: The market dynamics generator.
-- `M::Int`: The total number of decision time steps (excluding the terminal date).
-- `β::Float64`: The subjective discount factor.
-- `u::Function`: The pure utility function.
-- `compute_consumption::Function`: The strategy defining how controls translate into physical consumption.
-- `budget_constraint::Function`: The strategy defining how the principal state variable evolves over time.
-- `extrapolator::Function`: The strategy defining how to handle evaluations outside the `W_grid` boundaries.
-
-# Returns
-A 3-tuple of multidimensional arrays `(V, pol_c, pol_w)`:
-- `V`: The value function array of shape `(length(W_grid), length.(Z_grids)..., M + 1)`.
-- `pol_c`: The optimal consumption policy array of shape `(length(W_grid), length.(Z_grids)..., M)`.
-- `pol_w`: The optimal portfolio policy array of shape `(length(W_grid), length.(Z_grids)..., M)`.
 """
 function solve_dynamic_program(
+    solver::BruteForceSolver,
     W_grid::Vector{Float64}, Z_grids::Vector{Vector{Float64}},
-    c_grid::Vector{Float64}, omega_space::Vector{Vector{Float64}},
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    c_grid::Vector{Float64}, omega_space,
+    ε_nodes, W_weights::Vector{Float64},
     transition_model::Function, M::Int, β::Float64, u::Function,
     compute_consumption::Function, budget_constraint::Function, extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
     V     = zeros(Float64, sz..., M + 1)
     pol_c = zeros(Float64, sz..., M)
-    pol_w = Array{Vector{Float64}}(undef, sz..., M)
+    pol_w = Array{eltype(omega_space)}(undef, sz..., M)
 
     println("Setting terminal conditions...")
     for idx in CartesianIndices(sz)
@@ -237,10 +192,10 @@ function solve_dynamic_program(
 
         Threads.@threads for idx in CartesianIndices(sz)
             W_n = W_grid[idx[1]]
-            Z_n = [Z_grids[k][idx[1+k]] for k in 1:length(Z_grids)]
+            Z_n = ntuple(k -> Z_grids[k][idx[1+k]], length(Z_grids))
 
             best_val, best_c, best_ω = optimize_controls_brute_force(
-                W_n, Z_n, c_grid, omega_space, ε_nodes, W_weights,
+                W_n, SVector(Z_n), c_grid, omega_space, ε_nodes, W_weights,
                 V_next_interp, transition_model, β, u,
                 compute_consumption, budget_constraint, extrapolator
             )
@@ -256,15 +211,16 @@ function solve_dynamic_program(
 end
 
 function solve_dynamic_program(
+    solver::BruteForceSolver,
     W_grid::Vector{Float64}, Z_grids::Vector{Vector{Float64}},
-    omega_space::Vector{Vector{Float64}},
-    ε_nodes::Vector{Vector{Float64}}, W_weights::Vector{Float64},
+    omega_space,
+    ε_nodes, W_weights::Vector{Float64},
     transition_model::Function, M::Int, u::Function,
     state_to_wealth::Function, budget_constraint::Function, extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
     V     = zeros(Float64, sz..., M + 1)
-    pol_w = Array{Vector{Float64}}(undef, sz..., M)
+    pol_w = Array{eltype(omega_space)}(undef, sz..., M)
 
     println("Setting terminal conditions (Terminal Wealth)...")
     for idx in CartesianIndices(sz)
@@ -284,10 +240,10 @@ function solve_dynamic_program(
 
         Threads.@threads for idx in CartesianIndices(sz)
             W_n = W_grid[idx[1]]
-            Z_n = [Z_grids[k][idx[1+k]] for k in 1:length(Z_grids)]
+            Z_n = ntuple(k -> Z_grids[k][idx[1+k]], length(Z_grids))
 
             best_val, best_ω = optimize_controls_brute_force(
-                W_n, Z_n, omega_space, ε_nodes, W_weights,
+                W_n, SVector(Z_n), omega_space, ε_nodes, W_weights,
                 V_next_interp, transition_model,
                 budget_constraint, extrapolator
             )

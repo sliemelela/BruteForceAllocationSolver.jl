@@ -1,4 +1,5 @@
 using BruteForceAllocationSolver
+using StaticArrays
 using Test
 
 @testset "BruteForceAllocationSolver.jl Tests" begin
