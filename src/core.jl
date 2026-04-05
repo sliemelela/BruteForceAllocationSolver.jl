@@ -272,9 +272,9 @@ function optimize_controls(
     res = if solver.use_gradients
         g! = (G, x) -> ForwardDiff.gradient!(G, obj, x)
         od = OnceDifferentiable(obj, g!, x0)
-        optimize(od, lower, upper, x0, Fminbox(solver.method), Optim.Options())
+        optimize(od, lower, upper, x0, Fminbox(solver.method), solver.optim_options)
     else
-        optimize(obj, lower, upper, x0, Fminbox(solver.method), Optim.Options())
+        optimize(obj, lower, upper, x0, Fminbox(solver.method), solver.optim_options)
     end
 
     sol = Optim.minimizer(res)

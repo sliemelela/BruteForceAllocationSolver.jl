@@ -23,7 +23,7 @@ Base.@kwdef struct ZoomingSolver <: AbstractAllocationSolver
 end
 
 """
-    OptimSolver(method, use_gradients, coarse_warm_start_n)
+    OptimSolver(method, use_gradients, coarse_warm_start_n, optim_options)
 
 A continuous solver using Optim.jl. Supports Fminbox for constraints and
 ForwardDiff for gradients.
@@ -32,4 +32,10 @@ Base.@kwdef struct OptimSolver{T} <: AbstractAllocationSolver
     method::T = LBFGS()
     use_gradients::Bool = true
     coarse_warm_start_n::Int = 10
+    optim_options::Optim.Options = Optim.Options(
+        g_abstol = 1e-10,
+        outer_g_abstol = 1e-10,
+        x_abstol = 1e-4,
+        f_reltol = 1e-8
+    )
 end
