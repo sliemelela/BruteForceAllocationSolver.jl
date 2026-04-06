@@ -1,8 +1,18 @@
 @testset "Stochastic Interest Rate Models (2D Quadrature)" begin
     # 1. Base Parameters
     M, dt, γ = 5, 1.0, 5.0
-    u(X) = (X^(1 - γ)) / (1 - γ)
-    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # <--- 1. Add inverse utility (CE)
+
+    # Define utility function and its mathematical inverse (CE)
+    function make_utilities(γ::Float64)
+        one_minus_γ = 1.0 - γ
+        inv_power = 1.0 / one_minus_γ
+
+        u(W) = (W^one_minus_γ) / one_minus_γ
+        inv_u(v) = (one_minus_γ * v)^inv_power
+
+        return u, inv_u
+    end
+    u, inv_u = make_utilities(γ)
 
     # 2. Set up Grids
     G_X = 200

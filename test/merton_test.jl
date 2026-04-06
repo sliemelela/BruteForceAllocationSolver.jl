@@ -9,8 +9,17 @@ using Optim
 
     # Define utility function and its mathematical inverse (CE)
     γ = 5.0
-    u(x) = (x^(1 - γ))/(1 - γ)
-    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+    function make_utilities(γ::Float64)
+        one_minus_γ = 1.0 - γ
+        inv_power = 1.0 / one_minus_γ
+
+        u(W) = (W^one_minus_γ) / one_minus_γ
+        inv_u(v) = (one_minus_γ * v)^inv_power
+
+        return u, inv_u
+    end
+    u, inv_u = make_utilities(γ)
+
 
     # Setup grid parameters
     G_w, W_min, W_max = 500, 1.0, 100.0

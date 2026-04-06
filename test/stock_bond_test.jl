@@ -1,8 +1,18 @@
 @testset "Rolling Nominal Bond and Stock (2 Risky Assets)" begin
 
     M, dt, γ = 1, 0.5, 5.0
-    u(W) = (W^(1 - γ)) / (1 - γ)
-    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # <--- 1. Add inverse utility (CE)
+
+    # Define utility function and its mathematical inverse (CE)
+    function make_utilities(γ::Float64)
+        one_minus_γ = 1.0 - γ
+        inv_power = 1.0 / one_minus_γ
+
+        u(W) = (W^one_minus_γ) / one_minus_γ
+        inv_u(v) = (one_minus_γ * v)^inv_power
+
+        return u, inv_u
+    end
+    u, inv_u = make_utilities(γ)
 
     G_X = 300
     X_grid = generate_linear_grid(log(0.01), log(100.0), G_X)
