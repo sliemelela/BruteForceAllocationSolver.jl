@@ -14,12 +14,12 @@ println("==================================================")
 # ==============================================================================
 # 1. Global Parameters & Market Prices of Risk
 # ==============================================================================
-M, dt, γ = 10, 1.0, 5.0
+# M, dt, γ = 10, 1.0, 5.0
 T = M * dt
 γ_tilde = (γ - 1.0) / γ
 
-u(x) = (x^(1 - γ)) / (1 - γ)
-inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+# u(x) = (x^(1 - γ)) / (1 - γ)
+# inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
 
 # Economic Parameters
 κ_r, overline_r, σ_r, λ_r = 0.1, 0.02, 0.01, -0.1
@@ -99,7 +99,7 @@ r_0 = 0.02
 π_0 = 0.02
 
 # Evaluate Total Wealth
-F_0 = 140.0
+F_0 = 5.0
 H_0 = exact_human_capital_lemma_A7(M, dt, r_0, π_0)
 W_0 = F_0 + H_0
 
@@ -167,7 +167,7 @@ function eq36_optimal_weights_no_hc(t)
 
     wN = (B_r(h) * σ_r * phi_vec[2] + B_π(h) * σ_π * phi_vec[1]) / (B_r(h) * B_π(h) * σ_r * σ_π)
     wI = (1.0 - 1.0/γ) - (phi_vec[2] / (B_π(h) * σ_π))
-    wS = -phi_vec[3] / σ_S
+    wS = -phi_vec[3] / (γ * σ_S)
     return wN, wI, wS
 end
 
@@ -222,7 +222,7 @@ save("analytical_eq53_value_over_time.png", plot_curves(t_seq, [val_time], ["V(W
 save("analytical_eq55_ce_over_time.png", plot_curves(t_seq, [ce_time], ["CE"]; title="Eq 55: Certainty Equivalent (W=150, r=0.02, π=0.02)", xlabel="Time", ylabel="CE", legend_pos=:rt))
 save("analytical_eq143_durations_over_time.png", plot_curves(t_seq, [Dr_time, Dpi_time], ["D^r", "D^π"]; title="Eq 143: HC Sensitivities (r=0.02, π=0.02)", xlabel="Time", ylabel="Duration", legend_pos=:rt))
 save("analytical_eq36_weights_over_time.png", plot_curves(t_seq, [wN_no_hc_time, wI_no_hc_time, wS_no_hc_time], ["w_N", "w_I", "w_S"]; title="Eq 36: Weights without HC", xlabel="Time", ylabel="Weight", legend_pos=:lt))
-save("analytical_eq37_weights_over_time.png", plot_curves(t_seq, [wN_hc_time, wI_hc_time, wS_hc_time], ["w_N^*", "w_I^*", "w_S^*"]; title="Eq 37: Weights with HC (F=140, r=0.02, π=0.02)", xlabel="Time", ylabel="Weight", legend_pos=:lt))
+save("analytical_eq37_weights_over_time.png", plot_curves(t_seq, [wN_hc_time, wI_hc_time, wS_hc_time], ["w_N^*", "w_I^*", "w_S^*"]; title="Eq 37: Weights with HC (F=$F_0, r=0.02, π=0.02)", xlabel="Time", ylabel="Weight", legend_pos=:lt))
 
 save("analytical_eq53_value_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, val_heat; title="Eq 53: Value Function (t=0, W=150)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:viridis, label="Utility"))
 save("analytical_eq55_ce_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, ce_heat; title="Eq 55: Certainty Equivalent (t=0, W=150)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:viridis, label="CE"))
@@ -237,9 +237,9 @@ save("analytical_eq36_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_
 
 save("analytical_eq36_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_no_hc_heat;
      title="Eq 36: Stock WITHOUT HC (t=0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat; title="Eq 37: Nominal Bond WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat; title="Eq 37: ILB WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat; title="Eq 37: Stock WITH HC (t=0, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wN_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat; title="Eq 37: Nominal Bond WITH HC (t=0, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat; title="Eq 37: ILB WITH HC (t=0, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat; title="Eq 37: Stock WITH HC (t=0, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 
 # --- Heatmap Data (at t=5) ---
 t_fix_5 = 5.0
@@ -254,14 +254,14 @@ wI_hc_heat_9 = [eq37_optimal_weights_with_hc(t_fix_9, F_0, r, pi)[2] for r in an
 wS_hc_heat_9 = [eq37_optimal_weights_with_hc(t_fix_9, F_0, r, pi)[3] for r in ana_r_grid, pi in ana_pi_grid]
 
 # Save Analytical Heatmaps for t=5
-save("analytical_eq37_wN_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_5; title="Eq 37: Nominal Bond WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wI_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_5; title="Eq 37: ILB WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wS_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_5; title="Eq 37: Stock WITH HC (t=5, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wN_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_5; title="Eq 37: Nominal Bond WITH HC (t=5, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_5; title="Eq 37: ILB WITH HC (t=5, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap_t5.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_5; title="Eq 37: Stock WITH HC (t=5, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 
 # Save Analytical Heatmaps for t=9
-save("analytical_eq37_wN_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_9; title="Eq 37: Nominal Bond WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wI_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_9; title="Eq 37: ILB WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
-save("analytical_eq37_wS_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_9; title="Eq 37: Stock WITH HC (t=9, F=140)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wN_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_hc_heat_9; title="Eq 37: Nominal Bond WITH HC (t=9, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wI_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_hc_heat_9; title="Eq 37: ILB WITH HC (t=9, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
+save("analytical_eq37_wS_heatmap_t9.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_hc_heat_9; title="Eq 37: Stock WITH HC (t=9, F=$F_0)", xlabel="Interest Rate (r)", ylabel="Inflation (π)", colormap=:plasma, label="Weight"))
 
 # ==============================================================================
 # 6. Additional Lifecycle & Shock Analysis Plots (ANALYTICAL)
@@ -341,7 +341,60 @@ save("prob1_analytic_adv_shock_inflation_I.png",
                 legend_pos=:lt)
 )
 
-println("Analytical shock plots saved successfully!")
+
+# ==============================================================================
+# 7. Financial Wealth Portfolio Strategy (ω^F) Plots
+# ==============================================================================
+println("\nGenerating Financial Wealth Portfolio Strategy Plots...")
+
+# Calculate ω^F for the time sequence
+wN_F_time = zeros(length(t_seq))
+wI_F_time = zeros(length(t_seq))
+wS_F_time = zeros(length(t_seq))
+
+for i in 1:length(t_seq)
+    t = t_seq[i]
+    D_r, D_pi, H_t = eq143_durations(t, r_0, π_0)
+    W_ratio = (F_0 + H_t) / F_0
+    H_ratio = H_t / F_0
+
+    # Merton Baseline at this time (could be constant or horizon-dependent)
+    wN_m, wI_m, wS_m = eq36_optimal_weights_no_hc(t)
+
+    # ω^F Calculation
+    wN_F_time[i] = W_ratio * wN_m + H_ratio * (D_pi / B_π(τ_N) - D_r / B_r(τ_N))
+    wI_F_time[i] = W_ratio * wI_m - H_ratio * (D_pi / B_π(τ_I))
+    wS_F_time[i] = W_ratio * wS_m
+end
+
+# A. Lifecycle Plot: Financial Wealth Weights (ω^F)
+save("analytical_prob1_FW_weights_over_time.png",
+    plot_curves(t_seq,
+                [wN_F_time, wI_F_time, wS_F_time],
+                ["w_N (Nominal)", "w_I (ILB)", "w_S (Stock)"];
+                title="Analytical Strategy in Financial Wealth Terms (F=$F_0)",
+                xlabel="Time", ylabel="Financial Weight (ω^F)", legend_pos=:lt)
+)
+
+# B. State Heatmaps: Financial Wealth Weights (ω^F) at t=0
+# We iterate over r and pi, calculating the H-adjusted weight for each state
+wN_F_heat = [((F_0 + eq143_durations(0.0, r, pi)[3])/F_0) * eq36_optimal_weights_no_hc(0.0)[1] +
+             (eq143_durations(0.0, r, pi)[3]/F_0) * (eq143_durations(0.0, r, pi)[2]/B_π(τ_N) - eq143_durations(0.0, r, pi)[1]/B_r(τ_N))
+             for r in ana_r_grid, pi in ana_pi_grid]
+
+wI_F_heat = [((F_0 + eq143_durations(0.0, r, pi)[3])/F_0) * eq36_optimal_weights_no_hc(0.0)[2] -
+             (eq143_durations(0.0, r, pi)[3]/F_0) * (eq143_durations(0.0, r, pi)[2]/B_π(τ_I))
+             for r in ana_r_grid, pi in ana_pi_grid]
+
+wS_F_heat = [((F_0 + eq143_durations(0.0, r, pi)[3])/F_0) * eq36_optimal_weights_no_hc(0.0)[3]
+             for r in ana_r_grid, pi in ana_pi_grid]
+
+save("analytical_prob1_FW_heatmap_wN.png", plot_heatmap(ana_r_grid, ana_pi_grid, wN_F_heat; title="Analytical w_N^F (F=$F_0, t=0)", xlabel="r", ylabel="π", colormap=:plasma))
+save("analytical_prob1_FW_heatmap_wI.png", plot_heatmap(ana_r_grid, ana_pi_grid, wI_F_heat; title="Analytical w_I^F (F=$F_0, t=0)", xlabel="r", ylabel="π", colormap=:plasma))
+save("analytical_prob1_FW_heatmap_wS.png", plot_heatmap(ana_r_grid, ana_pi_grid, wS_F_heat; title="Analytical w_S^F (F=$F_0, t=0)", xlabel="r", ylabel="π", colormap=:plasma))
+
+println("Analytical Financial Wealth strategy plots saved successfully!")
+
 
 # ==============================================================================
 # 2b. Evaluate Total Wealth & Certainty Equivalent Ratios
