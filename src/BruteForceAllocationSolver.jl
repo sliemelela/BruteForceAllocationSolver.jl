@@ -30,7 +30,7 @@ export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
 export generate_gaussian_shocks
 
 # Export the analysis and plotting tools
-export create_policy_interpolators, calculate_equivalent_consumption_stream, calculate_certainty_equivalent
+export create_policy_interpolators, calculate_equivalent_consumption_stream
 
 # Export plotting
 export plot_heatmap, plot_curves, plot_mean_with_bounds
