@@ -17,8 +17,8 @@ export solve_dynamic_program
 
 # Export the built-in strategies
 export fractional_consumption, log_fractional_consumption, absolute_consumption
-export make_crra_extrapolator, standard_budget_constraint
-export make_log_crra_extrapolator, log_budget_constraint
+export make_ce_crra_extrapolator, standard_budget_constraint
+export make_ce_log_crra_extrapolator, log_budget_constraint
 
 # Export the transition models
 export make_merton_transition

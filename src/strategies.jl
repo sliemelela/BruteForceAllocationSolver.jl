@@ -1,7 +1,5 @@
 """
     fractional_consumption(W, c)
-
-Used when the state is raw Wealth, and the control `c` is a fraction (0 to 1).
 """
 function fractional_consumption(W::Real, c::Real)
     return c * W
@@ -9,8 +7,6 @@ end
 
 """
     log_fractional_consumption(X, c)
-
-Used when the state is Log-Wealth (X), and the control `c` is a fraction (0 to 1).
 """
 function log_fractional_consumption(X::Real, c::Real)
     return c * exp(X)
@@ -18,9 +14,6 @@ end
 
 """
     absolute_consumption(state, c)
-
-Used when the control `c` is an absolute dollar amount, rather than a fraction.
-(The state is ignored because c is already the actual consumption).
 """
 function absolute_consumption(state::Real, c::Real)
     return c
@@ -28,8 +21,6 @@ end
 
 """
     standard_budget_constraint(W, c, ω, R_e, R_base)
-
-The standard multiplicative budget constraint for wealth evolution.
 """
 function standard_budget_constraint(W, c, ω, R_e, R_base)
     return (1.0 - c) * W * (dot(ω, R_e) + R_base)
@@ -37,83 +28,50 @@ end
 
 """
     log_budget_constraint(X, c, ω, R_e, R_base)
-
-The budget constraint for wealth evolution in log-space.
-Here, the state variable `X` represents log(W).
 """
 function log_budget_constraint(X, c, ω, R_e, R_base)
-    # X_next = X + log(1 - c) + log(Portfolio Return)
-    # We use max(..., 1e-10) to prevent log(negative) if extreme shocks occur
     port_return = dot(ω, R_e) + R_base
-
     if port_return <= 0.0
         return -Inf
     end
-
     return X + log(1.0 - c) + log(port_return)
 end
 
+
 """
-    make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
+    make_ce_crra_extrapolator(W_min::Float64, W_max::Float64)
 
-Creates an extrapolation strategy perfectly scaled for Constant Relative Risk Aversion (CRRA)
-utility functions operating on an absolute wealth grid.
-
-Standard linear extrapolation fails for highly curved CRRA value functions, leading to
-artificial risk-taking at the grid boundaries. This factory function returns a closure that enforces
-the analytical property of CRRA models: the value function strictly scales proportional
-to ``(W_{next} / W_{bound})^{1-\\gamma}``.
-
-# Arguments
-- `W_min::Float64`: The absolute minimum boundary of the wealth grid.
-- `W_max::Float64`: The absolute maximum boundary of the wealth grid.
-- `γ::Float64`: The coefficient of relative risk aversion.
-
-# Returns
-- `Function`: A closure with the signature `(W_next::Real, Z_next, V_next_interp) -> Float64`
-  that safely evaluates future values inside or outside the defined grid bounds.
+Creates an extrapolation strategy for when the grid stores the Certainty Equivalent (CE).
+For CRRA utility, CE scales perfectly linearly with wealth.
 """
-function make_crra_extrapolator(W_min::Float64, W_max::Float64, γ::Float64)
-    return function(W_next::Real, Z_next, V_next_interp)
+function make_ce_crra_extrapolator(W_min::Float64, W_max::Float64)
+    return function(W_next::Real, Z_next, CE_next_interp)
+        W_next = max(W_next, 1e-10) # Prevent 0
         if W_next < W_min
-            W_next = max(W_next, 1e-10) # Prevent log(0)
-            return V_next_interp(W_min, Z_next...) * (W_next / W_min)^(1.0 - γ)
+            ce_bound = CE_next_interp(W_min, Z_next...)
+            return ce_bound * (W_next / W_min)
         elseif W_next > W_max
-            return V_next_interp(W_max, Z_next...) * (W_next / W_max)^(1.0 - γ)
+            ce_bound = CE_next_interp(W_max, Z_next...)
+            return ce_bound * (W_next / W_max)
         else
-            return V_next_interp(W_next, Z_next...)
+            return CE_next_interp(W_next, Z_next...)
         end
     end
 end
 
 """
-    make_log_crra_extrapolator(X_min::Float64, X_max::Float64, γ::Float64)
-
-Creates an extrapolation strategy perfectly scaled for CRRA utility when the principal
-state variable is formulated in log-wealth space (``X = \\log(W)``).
-
-This function translates the standard CRRA boundary scaling factor into log-space.
-The absolute scaling ratio ``(W_{next} / W_{bound})^{1-\\gamma}`` mathematically becomes
-``\\exp((1-\\gamma)(X_{next} - X_{bound}))``.
-
-# Arguments
-- `X_min::Float64`: The minimum boundary of the log-wealth grid.
-- `X_max::Float64`: The maximum boundary of the log-wealth grid.
-- `γ::Float64`: The coefficient of relative risk aversion.
-
-# Returns
-- `Function`: A closure with the signature `(X_next::Float64, Z_next, V_next_interp) -> Float64`
-  that safely evaluates future values inside or outside the defined log-grid bounds.
+    make_ce_log_crra_extrapolator(X_min::Float64, X_max::Float64)
 """
-function make_log_crra_extrapolator(X_min::Float64, X_max::Float64, γ::Float64)
-    return function(X_next::Real, Z_next, V_next_interp)
+function make_ce_log_crra_extrapolator(X_min::Float64, X_max::Float64)
+    return function(X_next::Real, Z_next, CE_next_interp)
         if X_next < X_min
-            # In log space, (W / W_min)^(1-γ) becomes exp((1-γ) * (X - X_min))
-            return V_next_interp(X_min, Z_next...) * exp((1.0 - γ) * (X_next - X_min))
+            ce_bound = CE_next_interp(X_min, Z_next...)
+            return ce_bound * exp(X_next - X_min)
         elseif X_next > X_max
-            return V_next_interp(X_max, Z_next...) * exp((1.0 - γ) * (X_next - X_max))
+            ce_bound = CE_next_interp(X_max, Z_next...)
+            return ce_bound * exp(X_next - X_max)
         else
-            return V_next_interp(X_next, Z_next...)
+            return CE_next_interp(X_next, Z_next...)
         end
     end
 end
