@@ -2,6 +2,7 @@
     # 1. Base Parameters
     M, dt, γ = 5, 1.0, 5.0
     u(X) = (X^(1 - γ)) / (1 - γ)
+    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # <--- 1. Add inverse utility (CE)
 
     # 2. Set up Grids
     G_X = 200
@@ -21,7 +22,8 @@
     ε_nodes, W_weights = generate_gaussian_shocks(2, 10, ρ_mat)
 
     # 4. Shared Economic Strategies
-    log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
+    # <--- 2. Update to CE-based log extrapolator (γ is no longer needed)
+    ce_log_extrapolator = make_ce_log_crra_extrapolator(X_grid[1], X_grid[end])
 
     # =========================================================================
     # Test Case A: Constant Mu (Optimal weight should SHRINK as r rises)
@@ -33,11 +35,12 @@
         κ, θ, σ_r, μ, σ_S, ρ_val, dt
     )
 
-    _, pol_w_mu = solve_dynamic_program(
+    # <--- 3. Inject inv_u into the solver
+    CE_mu, pol_w_mu = solve_dynamic_program(
         BruteForceSolver(),
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_mu,
-        M, u, exp, log_budget_constraint, log_extrapolator
+        M, u, inv_u, exp, log_budget_constraint, ce_log_extrapolator
     )
 
     # Validate
@@ -59,11 +62,12 @@
         κ, θ, σ_r, λ_S, σ_S, ρ_val, dt
     )
 
-    _, pol_w_premium = solve_dynamic_program(
-        BruteForceSolver(), # <--- NEW API REQUIREMENT
+    # <--- 3. Inject inv_u into the solver
+    CE_premium, pol_w_premium = solve_dynamic_program(
+        BruteForceSolver(),
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_premium,
-        M, u, exp, log_budget_constraint, log_extrapolator
+        M, u, inv_u, exp, log_budget_constraint, ce_log_extrapolator
     )
 
     # Validate
