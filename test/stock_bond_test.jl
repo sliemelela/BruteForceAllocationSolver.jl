@@ -2,6 +2,7 @@
 
     M, dt, γ = 1, 0.5, 5.0
     u(W) = (W^(1 - γ)) / (1 - γ)
+    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # <--- 1. Add inverse utility (CE)
 
     G_X = 300
     X_grid = generate_linear_grid(log(0.01), log(100.0), G_X)
@@ -15,7 +16,9 @@
     ρ_val = 0.0
     ρ_mat = [1.0 ρ_val; ρ_val 1.0]
     ε_nodes, W_weights = generate_gaussian_shocks(2, 8, ρ_mat)
-    log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
+
+    # <--- 2. Update to CE-based log extrapolator (γ is no longer needed)
+    ce_log_extrapolator = make_ce_log_crra_extrapolator(X_grid[1], X_grid[end])
 
     κ, θ, σ_r = 0.1, 0.03, 0.01
     λ_r, τ = -0.1, 10.0
@@ -25,11 +28,12 @@
         κ, θ, σ_r, λ_r, τ, λ_S, σ_S, ρ_val, dt
     )
 
-    _, pol_w = solve_dynamic_program(
+    # <--- 3. Inject inv_u into the solver
+    CE_term, pol_w = solve_dynamic_program(
         BruteForceSolver(),
         X_grid, Z_grids, omega_space,
         ε_nodes, W_weights, transition_bond_stock,
-        M, u, exp, log_budget_constraint, log_extrapolator # <--- Passed 'exp' here
+        M, u, inv_u, exp, log_budget_constraint, ce_log_extrapolator
     )
 
     B_r = (1.0 - exp(-κ * τ)) / κ
