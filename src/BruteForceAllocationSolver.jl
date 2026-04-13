@@ -19,6 +19,7 @@ export solve_dynamic_program
 export fractional_consumption, log_fractional_consumption, absolute_consumption
 export make_ce_crra_extrapolator, standard_budget_constraint
 export make_ce_log_crra_extrapolator, log_budget_constraint
+export make_ce_financial_wealth_extrapolator, make_shadow_wealth_estimator
 
 # Export the transition models
 export make_merton_transition
