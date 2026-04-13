@@ -15,7 +15,7 @@ println("==================================================")
 # ==============================================================================
 # 1. Global Parameters & Utilities
 # ==============================================================================
-const M = 40
+const M = 80
 const dt = 0.001
 const γ = 5.0
 T = M * dt
@@ -37,6 +37,8 @@ a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.25
 
 ρ_rπ, ρ_rS, ρ_πS = 0.5, -0.2, -0.2
 ρ_mat = [1.0 ρ_rπ ρ_rS; ρ_rπ 1.0 ρ_πS; ρ_rS ρ_πS 1.0]
+lambda_vec = [λ_r, λ_π, λ_S]
+phi_vec = -(ρ_mat \ lambda_vec)
 
 F_0, r_0, π_0 = 0.01, 0.02, 0.02
 
@@ -44,7 +46,7 @@ F_0, r_0, π_0 = 0.01, 0.02, 0.02
 # 2. Reduced Grids for Performance
 # ==============================================================================
 G_f = 10
-F_grid = generate_log_spaced_grid(0.1, 300.0, G_f)
+F_grid = generate_log_spaced_grid(0.01, 300.0, G_f)
 Z_grids = [
     generate_linear_grid(-0.02, 0.06, 5), # r_grid
     generate_linear_grid(-0.06, 0.10, 5)  # pi_grid
@@ -140,13 +142,95 @@ function problem1_budget_constraint(F, c, ω, R_e, R_base)
     return F * (dot(ω, R_e) + R_base) + 1.0 * dt
 end
 
-ce_ex = make_ce_crra_extrapolator(F_grid[1], F_grid[end])
+
+function make_shadow_wealth_estimator(M, dt, κ_r, overline_r, κ_π, overline_π; is_complete_market=true)
+
+    # Helper functions for exact pricing of Human Capital (Problem 1)
+    B_r(h) = abs(κ_r) < 1e-8 ? h : (1.0 - exp(-κ_r * h)) / κ_r
+    B_π(h) = abs(κ_π) < 1e-8 ? h : (1.0 - exp(-κ_π * h)) / κ_π
+
+    function A_I(h)
+        term1 = overline_r * (B_r(h) - h) - overline_π * (B_π(h) - h)
+        term2 = (σ_r^2 / (2 * κ_r^3)) * (2 * exp(-κ_r * h) - 0.5 * exp(-2 * κ_r * h) - 1.5)
+        term3 = (σ_π^2 / (2 * κ_π^3)) * (2 * exp(-κ_π * h) - 0.5 * exp(-2 * κ_π * h) - 1.5)
+        term4 = h * (σ_r^2 / (2 * κ_r^2) + σ_π^2 / (2 * κ_π^2))
+        term5 = (σ_r / κ_r) * (phi_vec[1] + ρ_rπ * phi_vec[2] + ρ_rS * phi_vec[3]) * (B_r(h) - h)
+        term6 = -(σ_π / κ_π) * (phi_vec[2] + ρ_rπ * phi_vec[1] + ρ_πS * phi_vec[3]) * (B_π(h) - h)
+        term7 = ρ_rπ * (σ_r * σ_π) / (κ_r * κ_π) * (B_r(h) + B_π(h) - (1.0 - exp(-(κ_r + κ_π) * h)) / (κ_r + κ_π) - h)
+        return term1 + term2 + term3 + term4 + term5 + term6 + term7
+
+    end
+    return function(n_next, r_next, pi_next)
+        time_remaining = (M - n_next + 1) * dt
+
+        if time_remaining <= 0.0
+            return 0.0
+        end
+
+        if is_complete_market
+            # For Problem 1: Use your exact analytical pricing (A_I, B_r, B_π formulas)
+            # You already have this logic in `get_HC_and_durations` in your scripts!
+            H_exact = 0.0
+            for step in n_next:M
+                h = (step - n_next) * dt
+                # Calculate exact real zero-coupon bond price P_real
+                P_real = exp(A_I(h) - B_r(h)*r_next + B_π(h)*pi_next)
+                H_exact += 1.0 * dt * P_real
+            end
+            return H_exact
+        else
+            # For Problem 3: We just need a topological shift.
+            # Discounting future income at the long-term expected real rate is a great heuristic.
+            expected_real_rate = overline_r - overline_π
+            if abs(expected_real_rate) < 1e-6
+                return 1.0 * time_remaining
+            else
+                return 1.0 * (1.0 - exp(-expected_real_rate * time_remaining)) / expected_real_rate
+            end
+        end
+    end
+end
+
+function smooth_clamp(W)
+    if W < 1e-8
+        return 1e-16 / (2e-8 - W)
+    end
+    return W
+end
+
+function make_ce_financial_wealth_extrapolator(F_min::Float64, F_max::Float64, get_H_func::Function)
+    return function(F_next::Real, Z_next, CE_interp, n_next::Int = 1)
+
+        # 1. Dynamically calculate the remaining Human Capital!
+        H_shadow = get_H_func(n_next, Z_next...)
+
+        # 2. Shield against negative total wealth using the old script's max logic
+        W_next = smooth_clamp(F_next + H_shadow)
+
+        if F_next < F_min
+            W_bound = smooth_clamp(F_min + H_shadow)
+            ce_bound = CE_interp(F_min, Z_next...)
+            return ce_bound * (W_next / W_bound)
+        elseif F_next > F_max
+            W_bound = smooth_clamp(F_max + H_shadow)
+            ce_bound = CE_interp(F_max, Z_next...)
+            return ce_bound * (W_next / W_bound)
+        else
+            return CE_interp(F_next, Z_next...)
+        end
+    end
+end
+
+terminal_W(F) = smooth_clamp(F)
+
+get_H_func = make_shadow_wealth_estimator(M, dt, κ_r, overline_r, κ_π, overline_π; is_complete_market=false)
+ce_ex = make_ce_financial_wealth_extrapolator(F_grid[1], F_grid[end], get_H_func)
 
 # ==============================================================================
 # 3. Solvers & Benchmarking
 # ==============================================================================
 solvers = [
-    # ("Zooming", ZoomingSolver(iterations=4, points_per_dim=10, zoom_range_factor=1.1)),
+    # ("Zooming", ZoomingSolver(iterations=2, points_per_dim=10, zoom_range_factor=1.5)),
     ("Optim", OptimSolver(
         use_gradients=true,
         coarse_warm_start_n=5,
@@ -161,7 +245,7 @@ best_CE_val = -Inf
 
 println("\nWarming up (pre-compiling) solvers...")
 for (name, solver) in solvers
-    solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob1, 1, u, inv_u, identity, problem1_budget_constraint, ce_ex)
+    solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob1, 1, u, inv_u, terminal_W, problem1_budget_constraint, ce_ex)
 end
 
 println("\nRunning Benchmarks (M = $M, T = $T)...")
@@ -170,7 +254,7 @@ for (name, solver) in solvers
 
     local CE_grid, pol_w, CE_interp
     time_taken = @elapsed begin
-        CE_grid, pol_w = solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob1, M, u, inv_u, identity, problem1_budget_constraint, ce_ex)
+        CE_grid, pol_w = solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob1, M, u, inv_u, terminal_W, problem1_budget_constraint, ce_ex)
     end
 
     CE_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), CE_grid[:, :, :, 1], extrapolation_bc=Line())
@@ -196,7 +280,8 @@ println("==================================================")
 
 # Exact Human Capital for Complete Market (r=0.02, pi=0.02)
 # H_0_complete = 9.8839
-H_0_complete = 0.02
+# H_0_complete = 0.02
+H_0_complete = M * dt * 1.0 # Will be 0.04 for M=40
 T_years = M * dt
 
 CE_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), CE_best[:, :, :, 1], extrapolation_bc=Line())

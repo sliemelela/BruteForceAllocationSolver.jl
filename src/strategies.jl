@@ -76,61 +76,6 @@ function make_ce_log_crra_extrapolator(X_min::Float64, X_max::Float64)
     end
 end
 
-function make_shadow_wealth_estimator(M, dt, κ_r, overline_r, κ_π, overline_π; is_complete_market=true)
-    return function(n_next, r_next, pi_next)
-        time_remaining = (M - n_next + 1) * dt
-
-        if time_remaining <= 0.0
-            return 0.0
-        end
-
-        if is_complete_market
-            # For Problem 1: Use your exact analytical pricing (A_I, B_r, B_π formulas)
-            # You already have this logic in `get_HC_and_durations` in your scripts!
-            H_exact = 0.0
-            for step in n_next:M
-                h = (step - n_next) * dt
-                # Calculate exact real zero-coupon bond price P_real
-                P_real = exp(A_I(h) - B_r(h)*r_next + B_π(h)*pi_next)
-                H_exact += 1.0 * dt * P_real
-            end
-            return H_exact
-        else
-            # For Problem 3: We just need a topological shift.
-            # Discounting future income at the long-term expected real rate is a great heuristic.
-            expected_real_rate = overline_r - overline_π
-            if abs(expected_real_rate) < 1e-6
-                return 1.0 * time_remaining
-            else
-                return 1.0 * (1.0 - exp(-expected_real_rate * time_remaining)) / expected_real_rate
-            end
-        end
-    end
-end
-
-
-function make_ce_financial_wealth_extrapolator(F_min::Float64, F_max::Float64, get_H_func::Function)
-    # Notice we now accept n_next to know how much time is left!
-    return function(F_next::Real, Z_next, CE_next_interp, n_next::Int)
-
-        # 1. Get the shadow wealth to shift the singularity
-        H_shadow = get_H_func(n_next, Z_next...)
-
-        # 2. Scale using Total Shadow Wealth
-        if F_next < F_min
-            ce_bound = CE_next_interp(F_min, Z_next...)
-            return ce_bound * ((F_next + H_shadow) / (F_min + H_shadow))
-
-        elseif F_next > F_max
-            ce_bound = CE_next_interp(F_max, Z_next...)
-            return ce_bound * ((F_next + H_shadow) / (F_max + H_shadow))
-
-        else
-            return CE_next_interp(F_next, Z_next...)
-        end
-    end
-end
-
 @inline function _invoke_extrapolator(extrapolator, W_next, Z_next, CE_next, n_next)
     # Check if the extrapolator accepts the 4th argument (n_next)
     if applicable(extrapolator, W_next, Z_next, CE_next, n_next)

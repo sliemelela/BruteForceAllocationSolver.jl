@@ -99,7 +99,7 @@ r_0 = 0.02
 π_0 = 0.02
 
 # Evaluate Total Wealth
-F_0 = 0.001
+F_0 = 0.01
 H_0 = exact_human_capital_lemma_A7(M, dt, r_0, π_0)
 W_0 = F_0 + H_0
 
