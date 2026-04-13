@@ -75,3 +75,13 @@ function make_ce_log_crra_extrapolator(X_min::Float64, X_max::Float64)
         end
     end
 end
+
+@inline function _invoke_extrapolator(extrapolator, W_next, Z_next, CE_next, n_next)
+    # Check if the extrapolator accepts the 4th argument (n_next)
+    if applicable(extrapolator, W_next, Z_next, CE_next, n_next)
+        return extrapolator(W_next, Z_next, CE_next, n_next)
+    else
+        # Fallback to the legacy 3-argument signature
+        return extrapolator(W_next, Z_next, CE_next)
+    end
+end
