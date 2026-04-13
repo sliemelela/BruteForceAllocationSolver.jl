@@ -15,8 +15,8 @@ println("==================================================")
 # ==============================================================================
 # 1. Global Parameters & Utilities
 # ==============================================================================
-const M = 20
-const dt = 0.5
+const M = 40
+const dt = 0.001
 const γ = 5.0
 T = M * dt
 
@@ -38,39 +38,74 @@ a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.25
 ρ_rπ, ρ_rS, ρ_πS = 0.5, -0.2, -0.2
 ρ_mat = [1.0 ρ_rπ ρ_rS; ρ_rπ 1.0 ρ_πS; ρ_rS ρ_πS 1.0]
 
-F_0, r_0, π_0 = 5.0, 0.02, 0.02
+F_0, r_0, π_0 = 0.01, 0.02, 0.02
 
 # ==============================================================================
 # 2. Reduced Grids for Performance
 # ==============================================================================
-G_f = 50
-F_grid = generate_log_spaced_grid(1.0, 300.0, G_f)
+G_f = 10
+F_grid = generate_log_spaced_grid(0.1, 300.0, G_f)
 Z_grids = [
-    generate_linear_grid(-0.02, 0.06, 21), # r_grid
-    generate_linear_grid(-0.06, 0.10, 21)  # pi_grid
+    generate_linear_grid(-0.02, 0.06, 5), # r_grid
+    generate_linear_grid(-0.06, 0.10, 5)  # pi_grid
 ]
 
 # 3D Portfolio Choice Space for Warm Starts
 omega_space = SVector{3, Float64}[]
-for w_N in range(-1.0, 6.0, length=10)
-    for w_I in range(-1.0, 6.0, length=10)
-        for w_S in range(0.0, 2.5, length=10)
+for w_N in range(-10.0, 20.0, length=30)
+    for w_I in range(-10.0, 20.0, length=30)
+        for w_S in range(-10.0, 20.0, length=30)
             push!(omega_space, SVector(w_N, w_I, w_S))
         end
     end
 end
-ε_nodes, W_weights = generate_gaussian_shocks(3, 5, ρ_mat)
+ε_nodes, W_weights = generate_gaussian_shocks(3, 3, ρ_mat)
 
+# function make_problem1_transition_FW(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
+#     # Sensitivities
+#     B_r_N = abs(κ_r) < 1e-8 ? τ_N : (1.0 - exp(-κ_r * τ_N)) / κ_r
+#     B_r_I = abs(κ_r) < 1e-8 ? τ_I : (1.0 - exp(-κ_r * τ_I)) / κ_r
+#     B_π_I = abs(κ_π) < 1e-8 ? τ_I : (1.0 - exp(-κ_π * τ_I)) / κ_π
+
+#     # Deterministic drift components of excess returns
+#     drift_N = -λ_r * σ_r * B_r_N
+#     drift_I = -λ_r * σ_r * B_r_I + λ_π * σ_π * B_π_I
+#     drift_S = λ_S * σ_S
+
+#     return function(Z, ε)
+#         r_n, π_n = Z[1], Z[2]
+#         ε_r, ε_π, ε_S = ε[1], ε[2], ε[3]
+
+#         # State transitions
+#         r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.02 + 1e-5, 0.06 - 1e-5)
+#         π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06 + 1e-5, 0.10 - 1e-5)
+#         Z_next = SVector(r_next, π_next)
+
+#         # Linear Euler Excess Returns (R^e)
+#         Re_N = drift_N * dt - B_r_N * σ_r * sqrt(dt) * ε_r
+#         Re_I = drift_I * dt - B_r_I * σ_r * sqrt(dt) * ε_r + B_π_I * σ_π * sqrt(dt) * ε_π
+#         Re_S = drift_S * dt + σ_S * sqrt(dt) * ε_S
+
+#         Re = SVector(Re_N, Re_I, Re_S)
+
+#         # 2. Real Base Return (1.0 + Real Risk-Free Rate)
+#         R_base_real = 1.0 + (r_n - π_n) * dt
+
+#         return Z_next, Re, R_base_real
+#     end
+# end
 function make_problem1_transition_FW(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
     # Sensitivities
     B_r_N = abs(κ_r) < 1e-8 ? τ_N : (1.0 - exp(-κ_r * τ_N)) / κ_r
     B_r_I = abs(κ_r) < 1e-8 ? τ_I : (1.0 - exp(-κ_r * τ_I)) / κ_r
     B_π_I = abs(κ_π) < 1e-8 ? τ_I : (1.0 - exp(-κ_π * τ_I)) / κ_π
 
-    # Deterministic drift components of excess returns
-    drift_N = -λ_r * σ_r * B_r_N
-    drift_I = -λ_r * σ_r * B_r_I + λ_π * σ_π * B_π_I
-    drift_S = λ_S * σ_S
+    # Variances for Ito correction
+    var_N = (-B_r_N * σ_r)^2
+    vol_I_r = -B_r_I * σ_r
+    vol_I_π = B_π_I * σ_π
+    var_I = vol_I_r^2 + vol_I_π^2 + 2 * ρ_rπ * vol_I_r * vol_I_π
+    var_S = σ_S^2
 
     return function(Z, ε)
         r_n, π_n = Z[1], Z[2]
@@ -81,24 +116,28 @@ function make_problem1_transition_FW(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π,
         π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06 + 1e-5, 0.10 - 1e-5)
         Z_next = SVector(r_next, π_next)
 
-        # Linear Euler Excess Returns (R^e)
-        Re_N = drift_N * dt - B_r_N * σ_r * sqrt(dt) * ε_r
-        Re_I = drift_I * dt - B_r_I * σ_r * sqrt(dt) * ε_r + B_π_I * σ_π * sqrt(dt) * ε_π
-        Re_S = drift_S * dt + σ_S * sqrt(dt) * ε_S
+        # Geometric Returns (Exact SDE integration)
+        Rf_real = exp((r_n - π_n) * dt)
 
-        Re = SVector(Re_N, Re_I, Re_S)
+        # Nominal Bond Return (Real terms)
+        R_N = exp((r_n - π_n - λ_r * σ_r * B_r_N - 0.5 * var_N) * dt - B_r_N * σ_r * sqrt(dt) * ε_r)
 
-        # 2. Real Base Return (1.0 + Real Risk-Free Rate)
-        R_base_real = 1.0 + (r_n - π_n) * dt
+        # ILB Return (Real terms)
+        R_I = exp((r_n - π_n - λ_r * σ_r * B_r_I + λ_π * σ_π * B_π_I - 0.5 * var_I) * dt + vol_I_r * sqrt(dt) * ε_r + vol_I_π * sqrt(dt) * ε_π)
 
-        return Z_next, Re, R_base_real
+        # Stock Return (Real terms)
+        R_S = exp((r_n - π_n + λ_S * σ_S - 0.5 * var_S) * dt + σ_S * sqrt(dt) * ε_S)
+
+        Re = SVector(R_N - Rf_real, R_I - Rf_real, R_S - Rf_real)
+
+        return Z_next, Re, Rf_real
     end
 end
 transition_prob1 = make_problem1_transition_FW(κ_r, overline_r, σ_r, λ_r, τ_N, κ_π, overline_π, σ_π, λ_π, τ_I, λ_S, σ_S, ρ_rπ, dt)
 
 # Identical Budget Constraint to Problem 3
 function problem1_budget_constraint(F, c, ω, R_e, R_base)
-    return max(F * (dot(ω, R_e) + R_base) + 1.0 * dt, 1e-10)
+    return F * (dot(ω, R_e) + R_base) + 1.0 * dt
 end
 
 ce_ex = make_ce_crra_extrapolator(F_grid[1], F_grid[end])
@@ -107,10 +146,11 @@ ce_ex = make_ce_crra_extrapolator(F_grid[1], F_grid[end])
 # 3. Solvers & Benchmarking
 # ==============================================================================
 solvers = [
+    # ("Zooming", ZoomingSolver(iterations=4, points_per_dim=10, zoom_range_factor=1.1)),
     ("Optim", OptimSolver(
         use_gradients=true,
         coarse_warm_start_n=5,
-        optim_options=Optim.Options(show_warnings=false) # Silences harmless line-search NaNs
+        optim_options=Optim.Options() # Silences harmless line-search NaNs
     ))
 ]
 
@@ -155,7 +195,8 @@ println("PROBLEM 1: CE ANALYSIS ACROSS WEALTH LEVELS")
 println("==================================================")
 
 # Exact Human Capital for Complete Market (r=0.02, pi=0.02)
-H_0_complete = 9.8839
+# H_0_complete = 9.8839
+H_0_complete = 0.02
 T_years = M * dt
 
 CE_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), CE_best[:, :, :, 1], extrapolation_bc=Line())
@@ -164,7 +205,7 @@ println("\n--- Wealth Variation & % CE Analysis (Complete Market) ---")
 println(rpad("F_0", 8), rpad("H_0/F_0", 10), rpad("W_0 (Base)", 12), rpad("CE (Abs)", 12), rpad("Total % CE", 12), rpad("Real CE Gain", 15), "Nominal CE Gain")
 println("-"^85)
 
-F_test_values = [50.0, 100.0, 140.0, 300.0]
+F_test_values = [0.01, 1.0, 10.0, 50.0, 100.0, 140.0, 300.0]
 
 for F_val in F_test_values
     W_base = F_val + H_0_complete
@@ -207,10 +248,28 @@ B_π(h) = abs(κ_π) < 1e-8 ? h : (1.0 - exp(-κ_π * h)) / κ_π
 lambda_vec = [λ_r, λ_π, λ_S]
 phi_vec = -(ρ_mat \ lambda_vec)
 
+
+function A_I(h)
+    term1 = overline_r * (B_r(h) - h) - overline_π * (B_π(h) - h)
+    term2 = (σ_r^2 / (2 * κ_r^3)) * (2 * exp(-κ_r * h) - 0.5 * exp(-2 * κ_r * h) - 1.5)
+    term3 = (σ_π^2 / (2 * κ_π^3)) * (2 * exp(-κ_π * h) - 0.5 * exp(-2 * κ_π * h) - 1.5)
+    term4 = h * (σ_r^2 / (2 * κ_r^2) + σ_π^2 / (2 * κ_π^2))
+    term5 = (σ_r / κ_r) * (phi_vec[1] + ρ_rπ * phi_vec[2] + ρ_rS * phi_vec[3]) * (B_r(h) - h)
+    term6 = -(σ_π / κ_π) * (phi_vec[2] + ρ_rπ * phi_vec[1] + ρ_πS * phi_vec[3]) * (B_π(h) - h)
+    term7 = ρ_rπ * (σ_r * σ_π) / (κ_r * κ_π) * (B_r(h) + B_π(h) - (1.0 - exp(-(κ_r + κ_π) * h)) / (κ_r + κ_π) - h)
+    return term1 + term2 + term3 + term4 + term5 + term6 + term7
+end
+
 function exact_human_capital(M, dt, r_0, π_0)
-    # Helper to calculate A_I(h) for real bond pricing... (Simplified for the check)
-    # Note: To avoid repeating 50 lines of A_I logic, we'll use the pre-calculated H_0
-    return 9.8839
+    A_I(h) = abs(κ_π) < 1e-8 ? h : (1.0 - exp(-κ_π * h)) / κ_π
+
+    integral_N = sum(exp(-(r_0 - π_0) * τ) * (1.0 - exp(-κ_r * (M*dt - τ))) / κ_r for τ in 0:dt:M*dt)
+    integral_I = sum(exp(-(r_0 - π_0) * τ) * A_I(M*dt - τ) for τ in 0:dt:M*dt)
+
+    H_N = σ_r * B_r(τ_N) * integral_N * dt
+    H_I = σ_π * B_π(τ_I) * integral_I * dt
+
+    return H_N + H_I
 end
 H_0 = exact_human_capital(M, dt, r_0, π_0)
 W_0 = F_0 + H_0

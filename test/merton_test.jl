@@ -20,7 +20,6 @@ using Optim
     end
     u, inv_u = make_utilities(γ)
 
-
     # Setup grid parameters
     G_w, W_min, W_max = 500, 1.0, 100.0
     G_c, c_min, c_max = 50, 0.01, 0.99

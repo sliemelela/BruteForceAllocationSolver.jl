@@ -99,7 +99,7 @@ r_0 = 0.02
 π_0 = 0.02
 
 # Evaluate Total Wealth
-F_0 = 5.0
+F_0 = 0.001
 H_0 = exact_human_capital_lemma_A7(M, dt, r_0, π_0)
 W_0 = F_0 + H_0
 
@@ -162,12 +162,29 @@ end
 
 # Equation (36): Optimal Portfolio WITHOUT Human Capital
 function eq36_optimal_weights_no_hc(t)
-    h = τ_N
-    if h < 1e-8 return 0.0, 0.0, 0.0 end
+    h_target = T - t
+    h_N = τ_N
+    h_I = τ_I
 
-    wN = (B_r(h) * σ_r * phi_vec[2] + B_π(h) * σ_π * phi_vec[1]) / (B_r(h) * B_π(h) * σ_r * σ_π)
-    wI = (1.0 - 1.0/γ) - (phi_vec[2] / (B_π(h) * σ_π))
-    wS = -phi_vec[3] / (γ * σ_S)
+    # Prevent divide-by-zero if bond maturities are zero
+    if h_N < 1e-8 || h_I < 1e-8
+        return 0.0, 0.0, 0.0
+    end
+
+    # 1. Myopic Demands (Dependent ONLY on rolling tool durations)
+    myopic_N = (phi_vec[1] * σ_π * B_π(h_I) + phi_vec[2] * σ_r * B_r(h_I)) / (γ * σ_r * σ_π * B_r(h_N) * B_π(h_I))
+    myopic_I = -phi_vec[2] / (γ * B_π(h_I) * σ_π)
+    myopic_S = -phi_vec[3] / (γ * σ_S)
+
+    # 2. Hedging Demands (Dependent on the ratio of Target vs Tool durations)
+    hedging_N = (1.0 - 1.0/γ) * (B_r(h_target) * B_π(h_I) - B_π(h_target) * B_r(h_I)) / (B_r(h_N) * B_π(h_I))
+    hedging_I = (1.0 - 1.0/γ) * (B_π(h_target) / B_π(h_I))
+
+    # 3. Total Optimal Weights
+    wN = myopic_N + hedging_N
+    wI = myopic_I + hedging_I
+    wS = myopic_S
+
     return wN, wI, wS
 end
 
@@ -410,7 +427,7 @@ println(rpad("F_0", 8), rpad("H_0/F_0", 10), rpad("W_0", 10), rpad("CE (Abs)", 1
 println("-"^85)
 
 # Test different starting financial wealths
-F_test_values = [1.0, 10.0, 50.0, 100.0, 140.0, 300.0, 1000.0]
+F_test_values = [0.001, 1.0, 10.0, 50.0, 100.0, 140.0, 300.0, 1000.0]
 
 for F_val in F_test_values
     W_val = F_val + H_0
@@ -439,7 +456,7 @@ end
 println("-"^85)
 
 # Set baseline values for the rest of the script's plotting functions
-F_0 = 140.0
+F_0 = 0.001
 W_0 = F_0 + H_0
 analytical_CE = W_0 * exp(exponent)
 analytical_V0 = (W_0^(1 - γ)) / (1 - γ) * exp((γ - 1) * (-exponent))
