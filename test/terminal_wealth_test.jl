@@ -2,8 +2,18 @@
     M = 10
     dt = 1.0
     γ = 5.0
-    u(W) = (W^(1 - γ)) / (1 - γ)
-    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+
+    # Define utility function and its mathematical inverse (CE)
+    function make_utilities(γ::Float64)
+        one_minus_γ = 1.0 - γ
+        inv_power = 1.0 / one_minus_γ
+
+        u(W) = (W^one_minus_γ) / one_minus_γ
+        inv_u(v) = (one_minus_γ * v)^inv_power
+
+        return u, inv_u
+    end
+    u, inv_u = make_utilities(γ)
 
     G_w = 200
     W_grid = generate_log_spaced_grid(1.0, 100.0, G_w)
@@ -17,16 +27,19 @@
     μ = 0.07
     σ = 0.20
     merton_transition = make_merton_transition(r, μ, σ, dt)
-    crra_ex = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
 
-    V_term, pol_w_term = solve_dynamic_program(
+    # Update to the new CE-based extrapolator (no gamma needed)
+    ce_ex = make_ce_crra_extrapolator(W_grid[1], W_grid[end])
+
+    # Rename V_term -> CE_term and inject inv_u
+    CE_term, pol_w_term = solve_dynamic_program(
         BruteForceSolver(),
         W_grid, Z_grids, omega_space,
         ε_nodes, W_weights, merton_transition,
-        M, u, identity, standard_budget_constraint, crra_ex
+        M, u, inv_u, identity, standard_budget_constraint, ce_ex
     )
 
-    @test size(V_term) == (G_w, M + 1)
+    @test size(CE_term) == (G_w, M + 1)
     @test size(pol_w_term) == (G_w, M)
     @test !@isdefined(pol_c)
 
@@ -45,7 +58,9 @@
         W_current = W_grid[middle_idx]
 
         analytical_CE = W_current * exp(certainty_growth_rate * time_to_maturity)
-        numerical_CE = calculate_certainty_equivalent(V_term[middle_idx, n], inv_u)
+
+        # 3. No need to calculate CE manually; it is natively stored in the grid
+        numerical_CE = CE_term[middle_idx, n]
 
         # We use a 5% relative tolerance (rtol) to account for Euler discretization error
         @test isapprox(numerical_CE, analytical_CE, rtol=0.05)

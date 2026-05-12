@@ -17,8 +17,8 @@ export solve_dynamic_program
 
 # Export the built-in strategies
 export fractional_consumption, log_fractional_consumption, absolute_consumption
-export make_crra_extrapolator, standard_budget_constraint
-export make_log_crra_extrapolator, log_budget_constraint
+export make_ce_crra_extrapolator, standard_budget_constraint
+export make_ce_log_crra_extrapolator, log_budget_constraint
 
 # Export the transition models
 export make_merton_transition
@@ -30,7 +30,7 @@ export generate_linear_grid, generate_log_spaced_grid, generate_adaptive_grid
 export generate_gaussian_shocks
 
 # Export the analysis and plotting tools
-export create_policy_interpolators, calculate_equivalent_consumption_stream, calculate_certainty_equivalent
+export create_policy_interpolators, calculate_equivalent_consumption_stream
 
 # Export plotting
 export plot_heatmap, plot_curves, plot_mean_with_bounds

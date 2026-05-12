@@ -1,138 +1,135 @@
-"""
-    evaluate_bellman_objective(
-        W_n::Float64, c_n::Float64, ω_n,
-        shocks_precalc, W_weights::Vector{Float64},
-        V_next::VType, β::Float64, u::UFunc,
-        compute_consumption::CCFunc, budget_constraint::BFunc,
-        extrapolator::EFunc
-    )
+# src/core.jl
 
-Evaluates the objective function using strictly typed precalculated transitions.
-This function is called inside the control grid search and is allocation-free.
+"""
+    evaluate_bellman_objective(...)
 """
 function evaluate_bellman_objective(
     W_n::Real, c_n::Real, ω_n,
     shocks_precalc::AbstractVector, W_weights::Vector{Float64},
-    V_next::VType, β::Float64, u::UFunc,
-    compute_consumption::CCFunc, budget_constraint::BFunc, extrapolator::EFunc
-) where {VType, UFunc, CCFunc, BFunc, EFunc}
+    CE_next::CEType, β::Float64, u::UFunc, inv_u::InvUFunc,
+    compute_consumption::CCFunc, budget_constraint::BFunc, extrapolator::EFunc,
+    n_next::Int = 1
+) where {CEType, UFunc, InvUFunc, CCFunc, BFunc, EFunc}
 
-    expected_future_value = 0.0
+    expected_future_utility = 0.0
 
     @inbounds for j in 1:length(W_weights)
         weight = W_weights[j]
         Z_next, R_e, R_base = shocks_precalc[j]
         W_next = budget_constraint(W_n, c_n, ω_n, R_e, R_base)
-        expected_future_value += weight * extrapolator(W_next, Z_next, V_next)
+
+        ce_next_val = _invoke_extrapolator(extrapolator, W_next, Z_next, CE_next, n_next)
+        expected_future_utility += weight * u(ce_next_val)
     end
 
     absolute_consumed = compute_consumption(W_n, c_n)
     current_utility = c_n > 0.0 ? u(absolute_consumed) : -Inf
 
-    return current_utility + β * expected_future_value
+    raw_total = current_utility + β * expected_future_utility
+    return inv_u(raw_total)
 end
 
+# Terminal Wealth Overload
 function evaluate_bellman_objective(
     W_n::Real, ω_n,
     shocks_precalc::AbstractVector, W_weights::Vector{Float64},
-    V_next::VType, budget_constraint::BFunc, extrapolator::EFunc
-) where {VType, BFunc, EFunc}
+    CE_next::CEType, u::UFunc, inv_u::InvUFunc,
+    budget_constraint::BFunc, extrapolator::EFunc,
+    n_next::Int = 1
+) where {CEType, UFunc, InvUFunc, BFunc, EFunc}
 
-    expected_future_value = 0.0
+    expected_future_utility = 0.0
 
     @inbounds for j in 1:length(W_weights)
         weight = W_weights[j]
         Z_next, R_e, R_base = shocks_precalc[j]
         W_next = budget_constraint(W_n, 0.0, ω_n, R_e, R_base)
-        expected_future_value += weight * extrapolator(W_next, Z_next, V_next)
+
+        ce_next_val = _invoke_extrapolator(extrapolator, W_next, Z_next, CE_next, n_next)
+        expected_future_utility += weight * u(ce_next_val)
     end
 
-    return expected_future_value
+    return inv_u(expected_future_utility)
 end
 
 """
     optimize_controls(solver::BruteForceSolver, ...)
-
-Finds the optimal controls using an exhaustive search over the entire grid.
 """
 function optimize_controls(
     solver::BruteForceSolver,
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
+    CE_next::CEType, transition_model::TMod, β::Float64, u::UFunc, inv_u::InvUFunc,
     compute_consumption::CCFunc, budget_constraint::BFunc,
-    extrapolator::EFunc
-) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
+    extrapolator::EFunc, n_next::Int = 1
+) where {CEType, TMod, UFunc, InvUFunc, CCFunc, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
-    best_val = -Inf
+    best_ce = -Inf
     best_c = 0.0
     best_ω = first(omega_space)
 
     for c_n in c_grid, ω_n in omega_space
-        current_val = evaluate_bellman_objective(
+        current_ce = evaluate_bellman_objective(
             W_n, c_n, ω_n, shocks_precalc, W_weights,
-            V_next, β, u, compute_consumption, budget_constraint, extrapolator
+            CE_next, β, u, inv_u, compute_consumption, budget_constraint, extrapolator, n_next
         )
 
-        if current_val > best_val
-            best_val = current_val
+        if current_ce > best_ce
+            best_ce = current_ce
             best_c = c_n
             best_ω = ω_n
         end
     end
 
-    return best_val, best_c, best_ω
+    return best_ce, best_c, best_ω
 end
 
 function optimize_controls(
     solver::BruteForceSolver,
     W_n::Float64, Z_n, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod,
-    budget_constraint::BFunc, extrapolator::EFunc
-) where {VType, TMod, BFunc, EFunc}
+    CE_next::CEType, transition_model::TMod, u::UFunc, inv_u::InvUFunc,
+    budget_constraint::BFunc, extrapolator::EFunc, n_next::Int = 1
+) where {CEType, TMod, UFunc, InvUFunc, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
-    best_val = -Inf
+    best_ce = -Inf
     best_ω = first(omega_space)
 
     for ω_n in omega_space
-        current_val = evaluate_bellman_objective(
+        current_ce = evaluate_bellman_objective(
             W_n, ω_n, shocks_precalc, W_weights,
-            V_next, budget_constraint, extrapolator
+            CE_next, u, inv_u, budget_constraint, extrapolator, n_next
         )
 
-        if current_val > best_val
-            best_val = current_val
+        if current_ce > best_ce
+            best_ce = current_ce
             best_ω = ω_n
         end
     end
 
-    return best_val, best_ω
+    return best_ce, best_ω
 end
 
 """
     optimize_controls(solver::ZoomingSolver, ...)
-
-Finds the optimal controls by first performing a coarse global sweep, then
-iteratively constructing a tighter sub-grid around the current best candidate.
 """
 function optimize_controls(
     solver::ZoomingSolver,
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
+    CE_next::CEType, transition_model::TMod, β::Float64, u::UFunc, inv_u::InvUFunc,
     compute_consumption::CCFunc, budget_constraint::BFunc,
-    extrapolator::EFunc
-) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
+    extrapolator::EFunc, n_next::Int = 1
+) where {CEType, TMod, UFunc, InvUFunc, CCFunc, BFunc, EFunc}
 
-    best_val, best_c, best_ω = optimize_controls(
+    best_ce, best_c, best_ω = optimize_controls(
         BruteForceSolver(), W_n, Z_n, c_grid, omega_space, ε_nodes, W_weights,
-        V_next, transition_model, β, u,
-        compute_consumption, budget_constraint, extrapolator
+        CE_next, transition_model, β, u, inv_u,
+        compute_consumption, budget_constraint, extrapolator, n_next
     )
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
@@ -152,7 +149,6 @@ function optimize_controls(
         local_ω_ranges = []
         for d in 1:length(cur_ω)
             step_ω = (ω_max[d] - ω_min[d]) / solver.points_per_dim * solver.zoom_range_factor
-
             push!(local_ω_ranges, range(max(ω_min[d], cur_ω[d] - step_ω),
                                         min(ω_max[d], cur_ω[d] + step_ω),
                                         length=solver.points_per_dim))
@@ -161,32 +157,32 @@ function optimize_controls(
         for c_test in local_c_grid
             for ω_vals in Iterators.product(local_ω_ranges...)
                 ω_test = SVector(ω_vals)
-                val = evaluate_bellman_objective(
+                current_ce = evaluate_bellman_objective(
                     W_n, c_test, ω_test, shocks_precalc, W_weights,
-                    V_next, β, u, compute_consumption,
+                    CE_next, β, u, inv_u, compute_consumption,
                     budget_constraint, extrapolator
                 )
-                if val > best_val
-                    best_val, cur_c, cur_ω = val, c_test, ω_test
+                if current_ce > best_ce
+                    best_ce, cur_c, cur_ω = current_ce, c_test, ω_test
                 end
             end
         end
     end
 
-    return best_val, cur_c, cur_ω
+    return best_ce, cur_c, cur_ω
 end
 
 function optimize_controls(
     solver::ZoomingSolver,
     W_n::Float64, Z_n, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod,
-    budget_constraint::BFunc, extrapolator::EFunc
-) where {VType, TMod, BFunc, EFunc}
+    CE_next::CEType, transition_model::TMod, u::UFunc, inv_u::InvUFunc,
+    budget_constraint::BFunc, extrapolator::EFunc, n_next::Int = 1
+) where {CEType, TMod, UFunc, InvUFunc, BFunc, EFunc}
 
-    best_val, best_ω = optimize_controls(
+    best_ce, best_ω = optimize_controls(
         BruteForceSolver(), W_n, Z_n, omega_space, ε_nodes, W_weights,
-        V_next, transition_model, budget_constraint, extrapolator
+        CE_next, transition_model, u, inv_u, budget_constraint, extrapolator, n_next
     )
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
@@ -200,7 +196,6 @@ function optimize_controls(
         local_ω_ranges = []
         for d in 1:length(cur_ω)
             step_ω = (ω_max[d] - ω_min[d]) / solver.points_per_dim * solver.zoom_range_factor
-
             push!(local_ω_ranges, range(max(ω_min[d], cur_ω[d] - step_ω),
                                         min(ω_max[d], cur_ω[d] + step_ω),
                                         length=solver.points_per_dim))
@@ -208,34 +203,31 @@ function optimize_controls(
 
         for ω_vals in Iterators.product(local_ω_ranges...)
             ω_test = SVector(ω_vals)
-            val = evaluate_bellman_objective(
+            current_ce = evaluate_bellman_objective(
                 W_n, ω_test, shocks_precalc, W_weights,
-                V_next, budget_constraint, extrapolator
+                CE_next, u, inv_u, budget_constraint, extrapolator, n_next
             )
-            if val > best_val
-                best_val, cur_ω = val, ω_test
+            if current_ce > best_ce
+                best_ce, cur_ω = current_ce, ω_test
             end
         end
     end
 
-    return best_val, cur_ω
+    return best_ce, cur_ω
 end
 
 """
     optimize_controls(solver::OptimSolver, ...)
-
-Finds the optimal controls using continuous optimization methods via Optim.jl.
-Utilizes Fminbox to ensure boundary compliance.
 """
 function optimize_controls(
     solver::OptimSolver,
     W_n::Float64, Z_n, c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod, β::Float64, u::UFunc,
+    CE_next::CEType, transition_model::TMod, β::Float64, u::UFunc, inv_u::InvUFunc,
     compute_consumption::CCFunc, budget_constraint::BFunc,
-    extrapolator::EFunc;
+    extrapolator::EFunc, n_next::Int = 1;
     warm_start_guess=nothing
-) where {VType, TMod, UFunc, CCFunc, BFunc, EFunc}
+) where {CEType, TMod, UFunc, InvUFunc, CCFunc, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
@@ -244,7 +236,7 @@ function optimize_controls(
         ω_val = SVector{length(omega_space[1])}(x[2:end])
         return -evaluate_bellman_objective(
             W_n, c_val, ω_val, shocks_precalc, W_weights,
-            V_next, β, u, compute_consumption, budget_constraint, extrapolator
+            CE_next, β, u, inv_u, compute_consumption, budget_constraint, extrapolator, n_next
         )
     end
 
@@ -257,10 +249,17 @@ function optimize_controls(
         step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
         coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
+        # Always guarantee the 0-leverage safe harbor is tested!
+        # This ensures Optim never gets trapped in a universal bankruptcy flat-zone
+        safe_port = SVector(fill(0.0, length(omega_space[1]))...)
+        if !(safe_port in coarse_ω)
+            push!(coarse_ω, safe_port)
+        end
+
         _, bc, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_c, coarse_ω,
-            ε_nodes, W_weights, V_next, transition_model, β, u,
-            compute_consumption, budget_constraint, extrapolator
+            ε_nodes, W_weights, CE_next, transition_model, β, u, inv_u,
+            compute_consumption, budget_constraint, extrapolator, n_next
         )
         vcat(bc, bω...)
     end
@@ -290,10 +289,10 @@ function optimize_controls(
     solver::OptimSolver,
     W_n::Float64, Z_n, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    V_next::VType, transition_model::TMod,
-    budget_constraint::BFunc, extrapolator::EFunc;
+    CE_next::CEType, transition_model::TMod, u::UFunc, inv_u::InvUFunc,
+    budget_constraint::BFunc, extrapolator::EFunc, n_next::Int = 1;
     warm_start_guess=nothing
-) where {VType, TMod, BFunc, EFunc}
+) where {CEType, TMod, UFunc, InvUFunc, BFunc, EFunc}
 
     shocks_precalc = [transition_model(Z_n, ε) for ε in ε_nodes]
 
@@ -301,7 +300,7 @@ function optimize_controls(
         ω_val = SVector{length(omega_space[1])}(x)
         return -evaluate_bellman_objective(
             W_n, ω_val, shocks_precalc, W_weights,
-            V_next, budget_constraint, extrapolator
+            CE_next, u, inv_u, budget_constraint, extrapolator, n_next
         )
     end
 
@@ -311,10 +310,17 @@ function optimize_controls(
         step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
         coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
+        # Always guarantee the 0-leverage safe harbor is tested!
+        # This ensures Optim never gets trapped in a universal bankruptcy flat-zone
+        safe_port = SVector(fill(0.0, length(omega_space[1]))...)
+        if !(safe_port in coarse_ω)
+            push!(coarse_ω, safe_port)
+        end
+
         _, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_ω,
-            ε_nodes, W_weights, V_next, transition_model,
-            budget_constraint, extrapolator
+            ε_nodes, W_weights, CE_next, transition_model, u, inv_u,
+            budget_constraint, extrapolator, n_next
         )
         Vector(bω)
     end
@@ -342,54 +348,50 @@ end
 
 """
     solve_dynamic_program(...)
-
-Solves a finite-horizon dynamic programming problem for portfolio and
-consumption choice using backwards recursion. Dispatches to the provided
-AbstractAllocationSolver.
 """
 function solve_dynamic_program(
     solver::AbstractAllocationSolver,
     W_grid::Vector{Float64}, Z_grids::Vector{Vector{Float64}},
     c_grid::Vector{Float64}, omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    transition_model::Function, M::Int, β::Float64, u::Function,
+    transition_model::Function, M::Int, β::Float64, u::Function, inv_u::Function,
     compute_consumption::Function, budget_constraint::Function,
     extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
-    V     = zeros(Float64, sz..., M + 1)
+    CE    = zeros(Float64, sz..., M + 1)
     pol_c = zeros(Float64, sz..., M)
     pol_w = Array{eltype(omega_space)}(undef, sz..., M)
 
     for idx in CartesianIndices(sz)
         state_terminal = W_grid[idx[1]]
         C_terminal = compute_consumption(state_terminal, 1.0)
-        V[idx, M+1] = u(C_terminal)
+        CE[idx, M+1] = C_terminal
     end
 
     for n in M:-1:1
-        V_next_data = selectdim(V, ndims(V), n + 1)
-        V_next_interp = linear_interpolation(
-            (W_grid, Z_grids...), V_next_data, extrapolation_bc=Line()
+        CE_next_data = selectdim(CE, ndims(CE), n + 1)
+        CE_next_interp = linear_interpolation(
+            (W_grid, Z_grids...), CE_next_data, extrapolation_bc=Line()
         )
 
         Threads.@threads for idx in CartesianIndices(sz)
             W_n = W_grid[idx[1]]
             Z_n = ntuple(k -> Z_grids[k][idx[1+k]], length(Z_grids))
 
-            best_val, best_c, best_ω = optimize_controls(
+            best_ce, best_c, best_ω = optimize_controls(
                 solver, W_n, SVector(Z_n), c_grid, omega_space,
-                ε_nodes, W_weights, V_next_interp, transition_model, β, u,
-                compute_consumption, budget_constraint, extrapolator
+                ε_nodes, W_weights, CE_next_interp, transition_model, β, u, inv_u,
+                compute_consumption, budget_constraint, extrapolator, n + 1
             )
 
-            V[idx, n]     = best_val
+            CE[idx, n]    = best_ce
             pol_c[idx, n] = best_c
             pol_w[idx, n] = best_ω
         end
     end
 
-    return V, pol_c, pol_w
+    return CE, pol_c, pol_w
 end
 
 function solve_dynamic_program(
@@ -397,42 +399,42 @@ function solve_dynamic_program(
     W_grid::Vector{Float64}, Z_grids::Vector{Vector{Float64}},
     omega_space,
     ε_nodes, W_weights::Vector{Float64},
-    transition_model::Function, M::Int, u::Function,
+    transition_model::Function, M::Int, u::Function, inv_u::Function,
     state_to_wealth::Function, budget_constraint::Function,
     extrapolator::Function
 )
     sz = (length(W_grid), (length(z) for z in Z_grids)...)
-    V     = zeros(Float64, sz..., M + 1)
+    CE    = zeros(Float64, sz..., M + 1)
     pol_w = Array{eltype(omega_space)}(undef, sz..., M)
 
     for idx in CartesianIndices(sz)
         state_terminal = W_grid[idx[1]]
         actual_wealth = state_to_wealth(state_terminal)
-        V[idx, M+1] = u(actual_wealth)
+        CE[idx, M+1] = actual_wealth
     end
 
     println("Starting backwards recursion from step $M down to 1...")
     for n in M:-1:1
         println("  Solving timestep: $n")
-        V_next_data = selectdim(V, ndims(V), n + 1)
-        V_next_interp = linear_interpolation(
-            (W_grid, Z_grids...), V_next_data, extrapolation_bc=Line()
+        CE_next_data = selectdim(CE, ndims(CE), n + 1)
+        CE_next_interp = linear_interpolation(
+            (W_grid, Z_grids...), CE_next_data, extrapolation_bc=Line()
         )
 
         Threads.@threads for idx in CartesianIndices(sz)
             W_n = W_grid[idx[1]]
             Z_n = ntuple(k -> Z_grids[k][idx[1+k]], length(Z_grids))
 
-            best_val, best_ω = optimize_controls(
+            best_ce, best_ω = optimize_controls(
                 solver, W_n, SVector(Z_n), omega_space,
-                ε_nodes, W_weights, V_next_interp, transition_model,
-                budget_constraint, extrapolator
+                ε_nodes, W_weights, CE_next_interp, transition_model, u, inv_u,
+                budget_constraint, extrapolator, n + 1
             )
 
-            V[idx, n]     = best_val
+            CE[idx, n]    = best_ce
             pol_w[idx, n] = best_ω
         end
     end
 
-    return V, pol_w
+    return CE, pol_w
 end

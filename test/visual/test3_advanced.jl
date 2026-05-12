@@ -13,11 +13,21 @@ println("Advanced Solvers: Problem 3 (Incomplete Market)")
 println("==================================================")
 
 # ==============================================================================
-# 1. Global Parameters
+# 1. Global Parameters & Utilities
 # ==============================================================================
-M, dt, γ = 10, 1.0, 2.0
-u(x) = (x^(1 - γ)) / (1 - γ)
-inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ))
+const M = 20
+const dt = 0.5
+const γ = 5.0
+
+# Use a factory function to strictly type the utilities and prevent boxing/allocations
+function make_utilities(γ_val::Float64)
+    one_minus_γ = 1.0 - γ_val
+    inv_power = 1.0 / one_minus_γ
+    u(x) = (x^one_minus_γ) / one_minus_γ
+    inv_u(v) = (one_minus_γ * v)^inv_power
+    return u, inv_u
+end
+u, inv_u = make_utilities(γ)
 
 # Economic Parameters
 κ_r, overline_r, σ_r, λ_r = 0.1, 0.02, 0.01, -0.1
@@ -28,7 +38,7 @@ a, b, σ_S, λ_S = 1.0, 0.0, 0.20, 0.25
 ρ_rπ, ρ_rS, ρ_πS = 0.5, -0.2, -0.2
 ρ_mat = [1.0 ρ_rπ ρ_rS; ρ_rπ 1.0 ρ_πS; ρ_rS ρ_πS 1.0]
 
-F_0, r_0, π_0 = 140.0, 0.02, 0.02
+F_0, r_0, π_0 = 10.0, 0.02, 0.02
 
 # ==============================================================================
 # 2. Reduced Grids for Performance
@@ -36,17 +46,17 @@ F_0, r_0, π_0 = 140.0, 0.02, 0.02
 G_f = 50
 F_grid = generate_log_spaced_grid(10.0, 300.0, G_f)
 Z_grids = [
-    generate_linear_grid(-0.02, 0.06, 10),
-    generate_linear_grid(-0.02, 0.06, 10)
+    generate_linear_grid(-0.04, 0.08, 15),
+    generate_linear_grid(-0.04, 0.08, 15)
 ]
 
 omega_space = SVector{2, Float64}[]
-for w_N in range(0.0, 3.0, length=11)
-    for w_S in range(0.5, 2.5, length=11)
+for w_N in range(-1.0, 3.0, length=11)
+    for w_S in range(-1.0, 2.5, length=11)
         push!(omega_space, SVector(w_N, w_S))
     end
 end
-ε_nodes, W_weights = generate_gaussian_shocks(3, 5, ρ_mat)
+ε_nodes, W_weights = generate_gaussian_shocks(3, 6, ρ_mat)
 
 function make_problem3_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ_π, λ_S, σ_S, dt)
     B_r_N = abs(κ_r) < 1e-8 ? τ_N : (1.0 - exp(-κ_r * τ_N)) / κ_r
@@ -57,8 +67,8 @@ function make_problem3_transition(κ_r, θ_r, σ_r, λ_r, τ_N, κ_π, θ_π, σ
         r_n, π_n = Z[1], Z[2]
         ε_r, ε_π, ε_S = ε[1], ε[2], ε[3]
 
-        r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.02, 0.06)
-        π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.06, 0.10)
+        r_next = clamp(r_n + κ_r * (θ_r - r_n) * dt + σ_r * sqrt(dt) * ε_r, -0.04, 0.08)
+        π_next = clamp(π_n + κ_π * (θ_π - π_n) * dt + σ_π * sqrt(dt) * ε_π, -0.04, 0.08)
         Z_next = SVector(r_next, π_next)
 
         Rf_nom = exp(r_n * dt)
@@ -75,51 +85,52 @@ transition_prob3 = make_problem3_transition(κ_r, overline_r, σ_r, λ_r, τ_N, 
 
 # === THE FIX: Changed 1e-10 to 1e-2 to prevent NaN Gradients in Optim! ===
 function problem3_budget_constraint(F, c, ω, R_e, R_base)
-    return max(F * (dot(ω, R_e) + R_base) + 1.0 * dt, 1e-2)
+    return max(F * (dot(ω, R_e) + R_base) + 1.0 * dt, 1e-10)
 end
 
-crra_ex = make_crra_extrapolator(F_grid[1], F_grid[end], γ)
+# Use the new CE extrapolator (no γ needed!)
+ce_ex = make_ce_crra_extrapolator(F_grid[1], F_grid[end])
 
 # ==============================================================================
 # 3. Solvers & Benchmarking
 # ==============================================================================
 solvers = [
     # ("BruteForce", BruteForceSolver()), # Uncomment to test baseline
-    ("Zooming", ZoomingSolver(iterations=4, points_per_dim=10, zoom_range_factor=1.1)),
-    # ("Optim", OptimSolver(use_gradients=true, coarse_warm_start_n=5, optim_options=Optim.Options(
-    #     iterations = 50 # Prevent it from looping forever if it gets stuck
-    # )))
+    # ("Zooming", ZoomingSolver(iterations=4, points_per_dim=10, zoom_range_factor=1.1)),
+    ("Optic", OptimSolver(use_gradients=true, coarse_warm_start_n=5, optim_options=Optim.Options(
+        iterations = 100 # Prevent it from looping forever if it gets stuck
+    )))
 ]
 
 results = []
 pol_w_best = nothing
-V_best = nothing
-best_CE = -Inf # Track the highest CE found to use for plotting
+CE_best = nothing
+best_CE_val = -Inf # Track the highest CE found to use for plotting
 
 println("\nWarming up (pre-compiling) solvers...")
 for (name, solver) in solvers
-    solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob3, 1, u, identity, problem3_budget_constraint, crra_ex)
+    solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob3, 1, u, inv_u, identity, problem3_budget_constraint, ce_ex)
 end
 
 println("\nRunning Benchmarks (M = 10)...")
 for (name, solver) in solvers
     println("  Running $name solver...")
 
-    local V, pol_w
+    local CE_grid, pol_w
     time_taken = @elapsed begin
-        V, pol_w = solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob3, M, u, identity, problem3_budget_constraint, crra_ex)
+        CE_grid, pol_w = solve_dynamic_program(solver, F_grid, Z_grids, omega_space, ε_nodes, W_weights, transition_prob3, M, u, inv_u, identity, problem3_budget_constraint, ce_ex)
     end
 
-    # Extract Certainty Equivalent
-    V_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), V[:, :, :, 1], extrapolation_bc=Line())
-    CE_num = calculate_certainty_equivalent(V_interp(F_0, r_0, π_0), inv_u)
+    # Extract Certainty Equivalent directly (no inverse utility calculation required anymore)
+    CE_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), CE_grid[:, :, :, 1], extrapolation_bc=Line())
+    CE_num = CE_interp(F_0, r_0, π_0)
 
     # Dynamically save the best policy
-    global best_CE, pol_w_best, V_best
-    if CE_num > best_CE
-        best_CE = CE_num
+    global best_CE_val, pol_w_best, CE_best
+    if CE_num > best_CE_val
+        best_CE_val = CE_num
         pol_w_best = pol_w
-        V_best = V
+        CE_best = CE_grid
     end
 
     push!(results, (name, time_taken, CE_num))
@@ -133,12 +144,11 @@ println("PROBLEM 3: CE ANALYSIS ACROSS WEALTH LEVELS")
 println("==================================================")
 
 # We need the exact Human Capital from Problem 1 to use as our "shadow benchmark".
-# Based on your Complete Market output, H_0 ≈ 9.8839 (for r_0 = 0.02, π_0 = 0.02)
 H_0_complete = 9.8839
 T_years = M * dt
 
-# Create an interpolator from the best solver's Value Function grid at t=1
-V_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), V_best[:, :, :, 1], extrapolation_bc=Line())
+# Create an interpolator from the best solver's CE grid at t=1
+CE_interp = linear_interpolation((F_grid, Z_grids[1], Z_grids[2]), CE_best[:, :, :, 1], extrapolation_bc=Line())
 
 println("\n--- Wealth Variation & % CE Analysis (Incomplete Market) ---")
 println(rpad("F_0", 8), rpad("H_0/F_0", 10), rpad("W_0 (Base)", 12), rpad("CE (Abs)", 12), rpad("Total % CE", 12), rpad("Real CE Gain", 15), "Nominal CE Gain")
@@ -151,13 +161,10 @@ for F_val in F_test_values
     W_base = F_val + H_0_complete
     HC_to_F_ratio = H_0_complete / F_val
 
-    # 2. Interpolate Expected Utility from Problem 3 solver
-    V_val = V_interp(F_val, r_0, π_0)
+    # 2. Extract Absolute Certainty Equivalent directly from the grid!
+    CE_val = CE_interp(F_val, r_0, π_0)
 
-    # 3. Calculate Absolute Certainty Equivalent
-    CE_val = calculate_certainty_equivalent(V_val, inv_u)
-
-    # 4. Calculate Metrics relative to W_base
+    # 3. Calculate Metrics relative to W_base
     CE_pct = (CE_val / W_base) * 100
     annual_real_CE_gain = (CE_val / W_base)^(1.0 / T_years) - 1.0
     annual_nom_CE_gain = (1.0 + annual_real_CE_gain) * exp(overline_π) - 1.0
@@ -218,7 +225,7 @@ diff_F3(t, F_val, r_val, pi_val) = begin
 end
 
 w3_proc = GenericSDEProcess(:F, drift_F3, diff_F3, F_0, [1, 2, 3], [:r, :pi])
-conf_prob3 = MarketConfig(sims=500, T=10.0, dt=1.0, M=10, processes=[rate_proc, pi_proc, w3_proc], correlations=ρ_mat)
+conf_prob3 = MarketConfig(sims=500, T=M * dt, dt=dt, M=M, processes=[rate_proc, pi_proc, w3_proc], correlations=ρ_mat)
 world_3 = build_world(conf_prob3)
 
 wN_sim, wS_sim = extract_controls_prob3(world_3.paths.F, world_3.paths.r, world_3.paths.pi, interp_w, 1.0)
@@ -231,9 +238,9 @@ fixed_f_idx = div(G_f, 2)
 fixed_F_val = round(F_grid[fixed_f_idx], digits=2)
 fixed_r_idx = 3; fixed_pi_idx = 3
 
-# Plot 1 & 2: Value & CE
-save("prob3_adv_value_function.png", plot_curves(F_grid, [V_best[:, fixed_r_idx, fixed_pi_idx, 1], V_best[:, fixed_r_idx, fixed_pi_idx, 5], V_best[:, fixed_r_idx, fixed_pi_idx, 10]], ["t = 1", "t = 5", "t = 10"]; title="Expected Utility V(F) (r=0.02, π=0.02)", xlabel="Financial Wealth (F)", ylabel="Utility", legend_pos=:rb))
-ce_over_time = [calculate_certainty_equivalent(V_best[fixed_f_idx, fixed_r_idx, fixed_pi_idx, t], inv_u) for t in 1:M]
+# Plot 1 & 2: Value (now CE) & CE Progression
+save("prob3_adv_value_function.png", plot_curves(F_grid, [CE_best[:, fixed_r_idx, fixed_pi_idx, 1], CE_best[:, fixed_r_idx, fixed_pi_idx, 5], CE_best[:, fixed_r_idx, fixed_pi_idx, 10]], ["t = 1", "t = 5", "t = 10"]; title="Certainty Equivalent CE(F) (r=0.02, π=0.02)", xlabel="Financial Wealth (F)", ylabel="CE (Dollars)", legend_pos=:rb))
+ce_over_time = [CE_best[fixed_f_idx, fixed_r_idx, fixed_pi_idx, t] for t in 1:M]
 save("prob3_adv_ce_progression.png", plot_curves(1:M, [ce_over_time], ["CE Financial Wealth"]; title="CE Progression (F=$fixed_F_val, r=0.02, π=0.02)", xlabel="Time Step (t)", ylabel="Guaranteed Terminal Wealth", legend_pos=:rt))
 
 # Plot 3-4: Mean Strategy Allocations

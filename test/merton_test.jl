@@ -7,9 +7,18 @@ using Optim
     dt = 1.0
     β = 0.96
 
-    # Define utility function
+    # Define utility function and its mathematical inverse (CE)
     γ = 5.0
-    u(x) = (x^(1 - γ))/(1 - γ)
+    function make_utilities(γ::Float64)
+        one_minus_γ = 1.0 - γ
+        inv_power = 1.0 / one_minus_γ
+
+        u(W) = (W^one_minus_γ) / one_minus_γ
+        inv_u(v) = (one_minus_γ * v)^inv_power
+
+        return u, inv_u
+    end
+    u, inv_u = make_utilities(γ)
 
     # Setup grid parameters
     G_w, W_min, W_max = 500, 1.0, 100.0
@@ -32,8 +41,8 @@ using Optim
     σ = 0.2
     merton_transition = make_merton_transition(r, μ, σ, dt)
 
-    # Inject the extrapolator
-    crra_extrapolator = make_crra_extrapolator(W_grid[1], W_grid[end], γ)
+    # <--- 2. UPDATED: Inject the CE extrapolator (no γ needed)
+    ce_extrapolator = make_ce_crra_extrapolator(W_grid[1], W_grid[end])
 
     # Define solvers to test (using lighter parameters for Zooming to keep tests fast)
     solvers = [
@@ -46,13 +55,13 @@ using Optim
 
     for solver in solvers
         @testset "$(typeof(solver))" begin
-            # Run the solver
-            V, pol_c, pol_w = solve_dynamic_program(
+            # <--- 3. UPDATED: Run the solver with inv_u, and rename V to CE
+            CE, pol_c, pol_w = solve_dynamic_program(
                 solver,
                 W_grid, Z_grids, c_grid, omega_space,
                 ε_nodes, W_weights, merton_transition,
-                M, β, u, fractional_consumption,
-                standard_budget_constraint, crra_extrapolator
+                M, β, u, inv_u, fractional_consumption, # <-- injected inv_u
+                standard_budget_constraint, ce_extrapolator
             )
 
             # Check if the grid matches the analytical solution
@@ -73,6 +82,7 @@ end
     # 1. Setup Parameters
     γ = 5.0
     u(X) = (X^(1 - γ)) / (1 - γ)
+    inv_u(v) = ((1.0 - γ) * v)^(1.0 / (1.0 - γ)) # <--- 1. NEW: Inverse Utility
 
     # 2. The Log-Space Grid
     G_X = 500
@@ -90,8 +100,8 @@ end
     # 4. Market Dynamics
     merton_transition = make_merton_transition(0.02, 0.07, 0.20, 1.0)
 
-    # 5. Inject the Log-Space Strategies
-    log_extrapolator = make_log_crra_extrapolator(X_grid[1], X_grid[end], γ)
+    # 5. Inject the Log-Space Strategies (no γ needed)
+    ce_log_extrapolator = make_ce_log_crra_extrapolator(X_grid[1], X_grid[end])
 
     solvers = [
         BruteForceSolver(),
@@ -103,13 +113,13 @@ end
 
     for solver in solvers
         @testset "$(typeof(solver))" begin
-            # 6. Run the solver!
-            V, pol_c, pol_w = solve_dynamic_program(
+            # 6. Run the solver! (Inject inv_u and rename V to CE_log)
+            CE_log, pol_c, pol_w = solve_dynamic_program(
                 solver,
                 X_grid, Z_grids, c_grid, omega_space,
                 ε_nodes, X_weights, merton_transition,
-                M, β, u, log_fractional_consumption,
-                log_budget_constraint, log_extrapolator
+                M, β, u, inv_u, log_fractional_consumption, # <-- injected inv_u
+                log_budget_constraint, ce_log_extrapolator
             )
 
             # 7. Validate
