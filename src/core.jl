@@ -249,6 +249,13 @@ function optimize_controls(
         step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
         coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
+        # Always guarantee the 0-leverage safe harbor is tested!
+        # This ensures Optim never gets trapped in a universal bankruptcy flat-zone
+        safe_port = SVector(fill(0.0, length(omega_space[1]))...)
+        if !(safe_port in coarse_ω)
+            push!(coarse_ω, safe_port)
+        end
+
         _, bc, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_c, coarse_ω,
             ε_nodes, W_weights, CE_next, transition_model, β, u, inv_u,
@@ -303,6 +310,13 @@ function optimize_controls(
         step_ω = max(1, div(length(omega_space), solver.coarse_warm_start_n))
         coarse_ω = [omega_space[i] for i in 1:step_ω:length(omega_space)]
 
+        # Always guarantee the 0-leverage safe harbor is tested!
+        # This ensures Optim never gets trapped in a universal bankruptcy flat-zone
+        safe_port = SVector(fill(0.0, length(omega_space[1]))...)
+        if !(safe_port in coarse_ω)
+            push!(coarse_ω, safe_port)
+        end
+
         _, bω = optimize_controls(
             BruteForceSolver(), W_n, Z_n, coarse_ω,
             ε_nodes, W_weights, CE_next, transition_model, u, inv_u,
@@ -352,7 +366,7 @@ function solve_dynamic_program(
     for idx in CartesianIndices(sz)
         state_terminal = W_grid[idx[1]]
         C_terminal = compute_consumption(state_terminal, 1.0)
-        CE[idx, M+1] = inv_u(u(C_terminal))
+        CE[idx, M+1] = C_terminal
     end
 
     for n in M:-1:1
@@ -396,7 +410,7 @@ function solve_dynamic_program(
     for idx in CartesianIndices(sz)
         state_terminal = W_grid[idx[1]]
         actual_wealth = state_to_wealth(state_terminal)
-        CE[idx, M+1] = inv_u(u(actual_wealth))
+        CE[idx, M+1] = actual_wealth
     end
 
     println("Starting backwards recursion from step $M down to 1...")
